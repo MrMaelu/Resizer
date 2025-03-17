@@ -330,11 +330,11 @@ def apply_settings(widget):
             box.add(toggle_button)
         
         # Stop existing periodic check
-        if hasattr(app, 'periodic_check_task') and app.periodic_check_task:
-            app.periodic_check_task.cancel()
+#        if hasattr(app, 'periodic_check_task') and app.periodic_check_task:
+#            app.periodic_check_task.cancel()
         
         # Start a periodic check
-        app.periodic_check_task = asyncio.create_task(periodic_check_windows_exist())
+#        app.periodic_check_task = asyncio.create_task(periodic_check_windows_exist())
 
         update_always_on_top_status()
 
