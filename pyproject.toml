@@ -9,4 +9,5 @@ dependencies = [
     "pygetwindow>=0.0.9",
     "pynput>=1.8.0",
     "pywin32>=309",
+    "toga>=0.4.9",
 ]
