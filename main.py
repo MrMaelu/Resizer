@@ -6,8 +6,6 @@ import os
 import re
 import toga
 from toga.style.pack import COLUMN, Pack
-from toga import TimeInput
-import time
 import asyncio
 
 """
@@ -21,7 +19,6 @@ Features:
 - Visual preview of window layouts
 - Toggle Always-on-Top state for configured windows
 - Support for multiple configuration files
-- Legacy support for config.ini
 
 Usage:
 1. Place configuration files named 'config_<name>.ini' in the program directory
@@ -47,7 +44,6 @@ titlebar = false
 Notes:
 - Windows without position will be auto-arranged
 - Window titles are matched partially and case-insensitive
-- Legacy config.ini is supported for backward compatibility
 """
 
 config = None  # Global variable to store the current configuration
