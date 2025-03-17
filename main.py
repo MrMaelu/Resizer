@@ -46,12 +46,12 @@ Notes:
 - Window titles are matched partially and case-insensitive
 """
 
-config = None  # Global variable to store the current configuration
+config = None
 
 def list_config_files():
     config_files = [f for f in os.listdir() if f.startswith("config_") and f.endswith(".ini")]
     config_files.sort()
-    config_names = [f[7:-4] for f in config_files]  # Extract the name between 'config_' and '.ini'
+    config_names = [f[7:-4] for f in config_files]
     return config_files, config_names
 
 def load_config(config_path):
@@ -86,15 +86,20 @@ def get_window_settings(title, config):
     return None, None, None, None
 
 topmost_windows = []
-managed_windows = []  # New list to keep track of all managed windows
+managed_windows = []
 
 def apply_configured_windows(config):
     if not config or len(config.sections()) == 0:
         return False
 
     # Calculate auto-layout parameters
-    screen_width = app.screens[0].size[0]
-    screen_height = app.screens[0].size[1]
+    try:
+        screen_width = app.screens[0].size[0]
+        screen_height = app.screens[0].size[1]
+    except:
+        screen_width = 0
+        screen_height = 0
+
     padding = 10
     grid_size = 2
 
@@ -212,7 +217,7 @@ def remove_titlebar(hwnd):
     win32gui.SetWindowPos(hwnd, 0, 0, 0, 0, 0, win32con.SWP_NOMOVE | win32con.SWP_NOSIZE | win32con.SWP_FRAMECHANGED)
 
 def toggle_always_on_top():
-    global config  # Use the global config variable
+    global config
     for hwnd in managed_windows:
         try:
             # Check if the window is configured to be always-on-top
@@ -242,7 +247,7 @@ def exit_script():
     
     os._exit(0)
 
-# Function to check if windows exist
+# Check if windows exist
 def check_windows_exist(config):
     all_titles = gw.getAllTitles()
     existing_windows = []
@@ -258,7 +263,7 @@ def check_windows_exist(config):
 
     return existing_windows, missing_windows
 
-# Function to update window status on the drawing
+# Update window status on the drawing
 def update_window_status(config, existing_windows, missing_windows):
     def config_draw(context, w, h):
         draw_screen_layout(screen_canvas, context, w, h, config, existing_windows, missing_windows)
@@ -305,7 +310,7 @@ async def periodic_check_windows_exist():
             print(f"Periodic check error: {e}")
 
 def apply_settings(widget):
-    global config  # Use the global config variable
+    global config
     selected_config = config_files[config_names.index(config_dropdown.value)]
     config = load_config(selected_config)
     if config:
@@ -313,14 +318,14 @@ def apply_settings(widget):
         if topmost_windows:
             box.add(toggle_button)
         
-        # Stop the existing periodic check timer if it is running
+        # Stop existing periodic check
         if hasattr(app, 'periodic_check_task') and app.periodic_check_task:
             app.periodic_check_task.cancel()
         
-        # Start a new periodic check timer with the new configuration
+        # Start a periodic check
         app.periodic_check_task = asyncio.create_task(periodic_check_windows_exist())
 
-        update_always_on_top_status()  # Update the always-on-top status
+        update_always_on_top_status()
 
 def cancel_settings(widget):
     exit_script()
@@ -340,8 +345,11 @@ def update_always_on_top_status():
                 is_enabled = True
                 break
         status += "Enabled" if is_enabled else "Disabled"
-        
-    setattr(always_on_top_status, 'text', status)
+    
+    try:
+        setattr(always_on_top_status, 'text', status)
+    except:
+        pass
 
 def draw_screen_layout(canvas, context, w, h, config, existing_windows, missing_windows):
     try:
@@ -442,8 +450,8 @@ def draw_window_box(context, title, x, y, w, h, real_x, real_y, real_w, real_h, 
         
         # Text layout parameters
         text_x = int(x + 5)
-        text_y = int(y + 15)  # Start text 15px from top
-        line_height = 20  # Space between lines
+        text_y = int(y + 15)
+        line_height = 20
         
         # Format text same as previous settings display
         pos_text = f"X {real_x}, Y {real_y}"
@@ -457,13 +465,13 @@ def draw_window_box(context, title, x, y, w, h, real_x, real_y, real_w, real_h, 
             f"Always-on-top: {'Yes' if always_on_top else 'No'}"
         ]
         
-        # Draw each line using Fill context
+        # Draw lines
         for i, line in enumerate(text_lines):
             y_pos = text_y + (i * line_height)
             with context.Fill(color='rgba(0, 0, 0, 1)') as fill:
                 fill.write_text(line, text_x, y_pos)
         
-        # Draw "missing" in red if the window does not exist
+        # Add missing text if window is not found
         if not window_exists:
             with context.Fill(color='red') as fill:
                 fill.write_text("\nMissing", text_x, text_y + (len(text_lines) * line_height))
@@ -480,7 +488,6 @@ def create_gui(app):
         # Define main container
         box = toga.Box(style=Pack(direction=COLUMN, padding=10))
 
-        # Get screen dimensions for scaling
         screen_width = app.screens[0].size[0]
         screen_height = app.screens[0].size[1]
 
@@ -506,7 +513,7 @@ def create_gui(app):
         )
         header_box.add(screen_dimensions_label)
 
-        # Define canvas with fixed aspect ratio
+        # Define canvas
         canvas_height = 200
         canvas_width = int(canvas_height * (screen_width/screen_height))
         screen_canvas = toga.Canvas(
@@ -587,9 +594,8 @@ def main():
     config_files, _ = list_config_files()
     
     if not config_files:
-        # Look for legacy config.ini
         if os.path.exists('config.ini'):
-            print("Found legacy config.ini, applying settings...")
+            print("Found config.ini, applying settings...")
             config = load_config('config.ini')
             if config and apply_configured_windows(config):
                 print("Settings applied successfully")
@@ -597,8 +603,8 @@ def main():
             else:
                 print("Failed to apply settings from config.ini")
     
-    # If no valid config found or config_ files exist, show GUI
     show_menu().main_loop()
+
 
 if __name__ == "__main__":
     main()
