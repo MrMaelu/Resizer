@@ -46,7 +46,22 @@ Notes:
 - Window titles are matched partially and case-insensitive
 """
 
+# globals
 config = None
+screen_width = 0
+screen_height = 0
+
+def get_screen_resolution():
+    global screen_width, screen_height
+#    max_screen_height = 0
+    if screen_width == 0:
+        screen_width = app.screens[0].size[0]
+        screen_height = app.screens[0].size[1]
+#        for screen in app.screens:
+#            screen_width = screen_width + screen.size[0]
+#            if max_screen_height < screen.size[1]:
+#                max_screen_height = screen.size[1]
+#    screen_height = max_screen_height
 
 def list_config_files():
     config_files = [f for f in os.listdir() if f.startswith("config_") and f.endswith(".ini")]
@@ -89,18 +104,14 @@ topmost_windows = []
 managed_windows = []
 
 def apply_configured_windows(config):
+    global screen_width, screen_height
+    get_screen_resolution()
+    
     if not config or len(config.sections()) == 0:
         return False
 
     # Calculate auto-layout parameters
-    try:
-        screen_width = app.screens[0].size[0]
-        screen_height = app.screens[0].size[1]
-    except:
-        screen_width = 0
-        screen_height = 0
-
-    padding = 10
+    padding = 1
     grid_size = 2
 
     # Collect windows by type
@@ -172,7 +183,7 @@ def apply_configured_windows(config):
                     window.moveTo(position[0], position[1])
                 elif section in auto_windows:
                     # Use auto-layout position
-                    window.moveTo(current_x, current_y)
+                    window.moveTo(int(current_x), int(current_y))
                     
                     # Move to next position
                     col_count += 1
@@ -352,6 +363,7 @@ def update_always_on_top_status():
         pass
 
 def draw_screen_layout(canvas, context, w, h, config, existing_windows, missing_windows):
+    global screen_width, screen_height
     try:
         # Setup background and border
         with context.Fill(color='white') as fill:
@@ -363,9 +375,7 @@ def draw_screen_layout(canvas, context, w, h, config, existing_windows, missing_
             return
             
         # Get screen dimensions and calculate usable area
-        screen_width = app.screens[0].size[0]
-        screen_height = app.screens[0].size[1]
-        padding = 10
+        padding = 1
         usable_width = w - (padding * 2)
         usable_height = h - (padding * 2)
         
@@ -482,14 +492,12 @@ def draw_window_box(context, title, x, y, w, h, real_x, real_y, real_w, real_h, 
         traceback.print_exc()
 
 def create_gui(app):
-    global box, config_dropdown, toggle_button, always_on_top_status, config_files, config_names, screen_canvas
+    global box, config_dropdown, toggle_button, always_on_top_status, config_files, config_names, screen_canvas, screen_width, screen_height
+    get_screen_resolution()
 
     try:
         # Define main container
         box = toga.Box(style=Pack(direction=COLUMN, padding=10))
-
-        screen_width = app.screens[0].size[0]
-        screen_height = app.screens[0].size[1]
 
         # Create header section
         header_box = toga.Box(style=Pack(direction=COLUMN, padding=5))
@@ -597,6 +605,7 @@ def main():
         if os.path.exists('config.ini'):
             print("Found config.ini, applying settings...")
             config = load_config('config.ini')
+            show_menu() # Running the menu without loop to initialize variables needed for applying the config.
             if config and apply_configured_windows(config):
                 print("Settings applied successfully")
                 return
@@ -604,7 +613,6 @@ def main():
                 print("Failed to apply settings from config.ini")
     
     show_menu().main_loop()
-
 
 if __name__ == "__main__":
     main()
