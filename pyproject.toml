@@ -5,7 +5,6 @@ description = "Will resize, position a window or application as well as remove t
 readme = "README.md"
 requires-python = ">=3.12"
 dependencies = [
-    "keyboard>=0.13.5",
     "pygetwindow>=0.0.9",
     "pynput>=1.8.0",
     "pywin32>=309",

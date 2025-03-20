@@ -57,11 +57,6 @@ def get_screen_resolution():
     if screen_width == 0:
         screen_width = app.screens[0].size[0]
         screen_height = app.screens[0].size[1]
-#        for screen in app.screens:
-#            screen_width = screen_width + screen.size[0]
-#            if max_screen_height < screen.size[1]:
-#                max_screen_height = screen.size[1]
-#    screen_height = max_screen_height
 
 def list_config_files():
     config_files = [f for f in os.listdir() if f.startswith("config_") and f.endswith(".ini")]
@@ -328,13 +323,6 @@ def apply_settings(widget):
         apply_configured_windows(config)
         if topmost_windows:
             box.add(toggle_button)
-        
-        # Stop existing periodic check
-#        if hasattr(app, 'periodic_check_task') and app.periodic_check_task:
-#            app.periodic_check_task.cancel()
-        
-        # Start a periodic check
-#        app.periodic_check_task = asyncio.create_task(periodic_check_windows_exist())
 
         update_always_on_top_status()
 
