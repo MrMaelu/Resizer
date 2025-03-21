@@ -485,10 +485,10 @@ def create_gui(app):
 
     try:
         # Define main container
-        box = toga.Box(style=Pack(direction=COLUMN, padding=10))
+        box = toga.Box(style=Pack(direction=COLUMN, margin=10))
 
         # Create header section
-        header_box = toga.Box(style=Pack(direction=COLUMN, padding=5))
+        header_box = toga.Box(style=Pack(direction=COLUMN, margin=5))
         
         # Define dropdown
         config_files, config_names = list_config_files()
@@ -498,14 +498,14 @@ def create_gui(app):
         config_dropdown = toga.Selection(
             items=config_names, 
             on_change=lambda widget: on_config_select(widget),
-            style=Pack(flex=1, padding=(0,0,5,0))
+            style=Pack(flex=1, margin=(0,0,5,0))
         )
         header_box.add(config_dropdown)
         
         screen_info = f"Screen: {screen_width} x {screen_height}"
         screen_dimensions_label = toga.Label(
             screen_info,
-            style=Pack(padding=(0,0,5,0))
+            style=Pack(margin=(0,0,5,0))
         )
         header_box.add(screen_dimensions_label)
 
@@ -514,7 +514,7 @@ def create_gui(app):
         canvas_width = int(canvas_height * (screen_width/screen_height))
         screen_canvas = toga.Canvas(
             style=Pack(
-                padding=5,
+                margin=5,
                 height=canvas_height,
                 width=canvas_width,
                 flex=1,
@@ -535,18 +535,18 @@ def create_gui(app):
         screen_canvas.refresh()
 
         # Create button container
-        button_box = toga.Box(style=Pack(direction='row', padding=5))
+        button_box = toga.Box(style=Pack(direction='row', margin=5))
 
         # Define status label
         always_on_top_status = toga.Label(
             "Always-on-Top: Disabled",
-            style=Pack(padding=5)
+            style=Pack(margin=5)
         )
 
         # Define buttons
-        apply_button = toga.Button('Apply', on_press=apply_settings, style=Pack(padding=2, flex=1))
-        cancel_button = toga.Button('Cancel', on_press=cancel_settings, style=Pack(padding=2, flex=1))
-        toggle_button = toga.Button('Toggle Always-on-Top', on_press=toggle_always_on_top_button, style=Pack(padding=2))
+        apply_button = toga.Button('Apply', on_press=apply_settings, style=Pack(margin=2, flex=1))
+        cancel_button = toga.Button('Cancel', on_press=cancel_settings, style=Pack(margin=2, flex=1))
+        toggle_button = toga.Button('Toggle Always-on-Top', on_press=toggle_always_on_top_button, style=Pack(margin=2))
         
         button_box.add(apply_button)
         button_box.add(cancel_button)

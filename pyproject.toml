@@ -1,12 +1,15 @@
 [project]
-name = "resizer"
-version = "0.1.0"
-description = "Will resize, position a window or application as well as remove the titlebar"
+name = "WindowPositioner"
+version = "0.3.0"
+description = "Will let you control size, position, always-on-top and can remove titlebar for windowed applications."
 readme = "README.md"
 requires-python = ">=3.12"
 dependencies = [
+    "pyautogui>=0.9.54",
     "pygetwindow>=0.0.9",
     "pynput>=1.8.0",
     "pywin32>=309",
+    "setuptools-scm>=8.2.1",
     "toga>=0.4.9",
+    "travertino>=0.3.0",
 ]
