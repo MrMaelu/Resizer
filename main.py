@@ -55,7 +55,8 @@ def get_screen_resolution():
     global screen_width, screen_height
 #    max_screen_height = 0
     if screen_width == 0:
-        screen_width = app.screens[0].size[0]
+        for screen in app.screens:
+            screen_width += screen.size[0]
         screen_height = app.screens[0].size[1]
 
 def list_config_files():
@@ -327,6 +328,35 @@ def apply_settings(widget):
         update_always_on_top_status()
 
 def cancel_settings(widget):
+    global config
+    # Restore only AOT and titlebar settings
+    for hwnd in managed_windows:
+        try:
+            # Remove always-on-top status
+            always_on_top = win32gui.GetWindowLong(hwnd, win32con.GWL_EXSTYLE) & win32con.WS_EX_TOPMOST
+            if always_on_top:
+                set_always_on_top(hwnd, False)
+            
+            # Restore titlebar if it was removed
+            style = win32gui.GetWindowLong(hwnd, win32con.GWL_STYLE)
+            if not (style & win32con.WS_CAPTION):
+                style |= win32con.WS_CAPTION
+                win32gui.SetWindowLong(hwnd, win32con.GWL_STYLE, style)
+                win32gui.SetWindowPos(hwnd, 0, 0, 0, 0, 0, 
+                                    win32con.SWP_NOMOVE | win32con.SWP_NOSIZE | 
+                                    win32con.SWP_FRAMECHANGED)
+        except Exception as e:
+            print(f"Failed to restore window settings: {e}")
+    
+    # Clear the topmost_windows list but keep managed_windows for position tracking
+    topmost_windows.clear()
+    update_always_on_top_status()
+    
+    # Update GUI
+    if toggle_button in box.children:
+        box.remove(toggle_button)
+
+def exit_application(widget):
     exit_script()
 
 def toggle_always_on_top_button(widget):
@@ -485,10 +515,10 @@ def create_gui(app):
 
     try:
         # Define main container
-        box = toga.Box(style=Pack(direction=COLUMN, margin=10))
+        box = toga.Box(style=Pack(direction=COLUMN, padding=10))
 
         # Create header section
-        header_box = toga.Box(style=Pack(direction=COLUMN, margin=5))
+        header_box = toga.Box(style=Pack(direction=COLUMN, padding=5))
         
         # Define dropdown
         config_files, config_names = list_config_files()
@@ -498,14 +528,14 @@ def create_gui(app):
         config_dropdown = toga.Selection(
             items=config_names, 
             on_change=lambda widget: on_config_select(widget),
-            style=Pack(flex=1, margin=(0,0,5,0))
+            style=Pack(flex=1, padding=(0,0,5,0))
         )
         header_box.add(config_dropdown)
         
         screen_info = f"Screen: {screen_width} x {screen_height}"
         screen_dimensions_label = toga.Label(
             screen_info,
-            style=Pack(margin=(0,0,5,0))
+            style=Pack(padding=(0,0,5,0))
         )
         header_box.add(screen_dimensions_label)
 
@@ -514,7 +544,7 @@ def create_gui(app):
         canvas_width = int(canvas_height * (screen_width/screen_height))
         screen_canvas = toga.Canvas(
             style=Pack(
-                margin=5,
+                padding=5,
                 height=canvas_height,
                 width=canvas_width,
                 flex=1,
@@ -535,21 +565,23 @@ def create_gui(app):
         screen_canvas.refresh()
 
         # Create button container
-        button_box = toga.Box(style=Pack(direction='row', margin=5))
+        button_box = toga.Box(style=Pack(direction='row', padding=5))
 
         # Define status label
         always_on_top_status = toga.Label(
             "Always-on-Top: Disabled",
-            style=Pack(margin=5)
+            style=Pack(padding=5)
         )
 
         # Define buttons
-        apply_button = toga.Button('Apply', on_press=apply_settings, style=Pack(margin=2, flex=1))
-        cancel_button = toga.Button('Cancel', on_press=cancel_settings, style=Pack(margin=2, flex=1))
-        toggle_button = toga.Button('Toggle Always-on-Top', on_press=toggle_always_on_top_button, style=Pack(margin=2))
+        apply_button = toga.Button('Apply', on_press=apply_settings, style=Pack(padding=2, flex=1))
+        cancel_button = toga.Button('Cancel', on_press=cancel_settings, style=Pack(padding=2, flex=1))
+        exit_button = toga.Button('Exit', on_press=exit_application, style=Pack(padding=2, flex=1))
+        toggle_button = toga.Button('Toggle Always-on-Top', on_press=toggle_always_on_top_button, style=Pack(padding=2))
         
         button_box.add(apply_button)
         button_box.add(cancel_button)
+        button_box.add(exit_button)
 
         # Assemble the layout
         box.add(header_box)
@@ -560,9 +592,9 @@ def create_gui(app):
         # Configure window
         app.main_window.content = box
         app.main_window.size = (700, 400)
-        app.main_window.position = (
-            (screen_width // 2) - (app.main_window.size[0] // 2),
-            (screen_height // 2) - (app.main_window.size[1] // 2)
+        app.main_window.position = (0,0
+#            (screen_width // 2) - (app.main_window.size[0] // 2),
+#            (screen_height // 2) - (app.main_window.size[1] // 2)
         )
 
         # Set initial value and trigger selection
