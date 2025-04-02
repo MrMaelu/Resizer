@@ -81,7 +81,8 @@ def get_screen_resolution():
     global screen_width, screen_height
 #    max_screen_height = 0
     if screen_width == 0:
-        screen_width = app.screens[0].size[0]
+        for screen in app.screens:
+            screen_width += screen.size[0]
         screen_height = app.screens[0].size[1]
 
 def list_config_files():
