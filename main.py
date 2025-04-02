@@ -1,4 +1,5 @@
 import pygetwindow as gw
+import win32api
 import win32gui
 import win32con
 import configparser
@@ -7,32 +8,53 @@ import re
 import toga
 from toga.style.pack import COLUMN, Pack
 import asyncio
+from asyncio import Lock
+import time
+import threading
+
+# Global lock for periodic checks
+periodic_check_lock = Lock()
+
+is_dragging = False
 
 """
-Window Positioner - A tool to manage window layouts and settings
+Window Positioner - Manage window layouts and apply manual overrides
 
-This script provides a GUI to manage and apply window configurations for multiple applications.
-It allows you to reposition, resize, remove title bars, and set windows as "Always on Top".
+This script provides a GUI to:
+1. Load and apply window layout configurations (position, size, always-on-top, title bar)
+   from '.ini' files.
+2. Manually select any window to make it always-on-top and remove its title bar.
 
 Features:
-- Load and apply window configurations from .ini files
-- Visual preview of window layouts
-- Toggle Always-on-Top state for configured windows
-- Support for multiple configuration files
+- Load and apply window configurations from 'config_*.ini' files.
+- Visual preview of the selected configuration's layout.
+- Periodic check to maintain the state of configured windows (when a config is applied).
+- Manually select any window via button click to make it Always-on-Top and remove its title bar.
+- Reset all applied settings (config or manual) using the 'Cancel/reset settings' button.
+- Toggle Always-on-Top state specifically for windows managed by the *currently applied config*.
+- Support for multiple configuration files.
 
 Usage:
-1. Place configuration files named 'config_<name>.ini' in the program directory
-2. Select a configuration from the dropdown menu to preview
-3. Click 'Apply' to activate the window layout
-4. Use 'Toggle Always-on-Top' to change window states
-5. 'Cancel' will exit and restore normal window states
+1. Place configuration files named 'config_<name>.ini' in the program directory.
+2. Select a configuration from the dropdown menu to preview its layout.
+3. Click 'Apply config' to activate the window layout defined in the selected config file.
+   - A periodic check starts to maintain the state of these configured windows.
+4. Click 'Select Window', then click on any target window on your screen.
+   - This makes the selected window Always-on-Top and removes its title bar.
+   - Entering selection mode stops any active configuration and periodic checks, and resets previously managed windows.
+   - Applying a config or selecting a *new* window resets the previously *manually* selected one.
+5. Click 'Cancel/reset settings':
+   - If in 'Select Window' mode, it cancels the selection process.
+   - It resets *all* windows currently managed (by config or manual selection) to their default state (Always-on-Top removed, title bar restored).
+   - It re-enables all buttons.
+6. Use 'Toggle Always-on-Top' to change the state of windows managed by the *currently applied config*. (Button is enabled only when a config with always-on-top windows is active).
 
-Configuration Format:
+Configuration Format (config_*.ini):
 [Window Title]
-position = x,y         # Window position (optional)
-size = width,height    # Window size (optional)
-always_on_top = true/false
-titlebar = true/false
+position = x,y              # Window position (optional)
+size = width,height         # Window size (optional)
+always_on_top = true/false  # Set always-on-top state (optional, default false)
+titlebar = true/false       # Keep title bar (optional, default true)
 
 Example:
 [Microsoft Edge]
@@ -42,14 +64,18 @@ always_on_top = true
 titlebar = false
 
 Notes:
-- Windows without position will be auto-arranged
-- Window titles are matched partially and case-insensitive
+- Windows without position/size in config will be auto-arranged based on screen size.
+- Window titles in config are matched partially and case-insensitively against open windows.
 """
 
 # globals
 config = None
 screen_width = 0
 screen_height = 0
+selected_window_button = None
+status_label = None
+waiting_for_window_selection = False
+selected_window_hwnd = None
 
 def get_screen_resolution():
     global screen_width, screen_height
@@ -66,10 +92,16 @@ def list_config_files():
 
 def load_config(config_path):
     config = configparser.ConfigParser()
-    if os.path.exists(config_path):
-        config.read(config_path)
-        return config
-    return None
+    try:
+        if os.path.exists(config_path):
+            config.read(config_path)
+            return config
+        return None
+    except Exception as e:
+        print(f"Error loading config file {config_path}: {e}")
+        import traceback
+        traceback.print_exc()
+        return None
 
 def clean_title(title):
     # Remove non-printable characters, zero-width spaces, and normalize spacing
@@ -99,110 +131,142 @@ topmost_windows = []
 managed_windows = []
 
 def apply_configured_windows(config):
-    global screen_width, screen_height
-    get_screen_resolution()
-    
-    if not config or len(config.sections()) == 0:
-        return False
-
-    # Calculate auto-layout parameters
-    padding = 1
-    grid_size = 2
-
-    # Collect windows by type
-    positioned_windows = []
-    auto_windows = []
-    for section in config.sections():
-        pos = config[section].get("position")
-        size = config[section].get("size")
-        if pos:
-            positioned_windows.append(section)
-        else:
-            auto_windows.append(section)
-
-    # Calculate auto-layout grid
-    if auto_windows:
-        windows_per_row = min(grid_size, len(auto_windows))
-        window_width = (screen_width - (padding * (windows_per_row + 1))) / windows_per_row
-        window_height = (screen_height - padding * 2) / ((len(auto_windows) + windows_per_row - 1) // windows_per_row)
+    # Applies window configurations from the given config to the currently open windows.
+    try:
+        global screen_width, screen_height
+        get_screen_resolution()
         
-        # Track auto-layout position
-        current_x = padding
-        current_y = padding
-        col_count = 0
+        if not config or len(config.sections()) == 0:
+            return False
 
-    global topmost_windows, managed_windows
-    # Remove always-on-top status for any current config
-    for hwnd in topmost_windows:
-        try:
-            always_on_top = win32gui.GetWindowLong(hwnd, win32con.GWL_EXSTYLE) & win32con.WS_EX_TOPMOST
-            if always_on_top:
-                set_always_on_top(hwnd, False)
-        except Exception as e:
-            print("Failed to toggle always-on-top. Window might be closed.")
+        # Calculate auto-layout parameters
+        padding = 1
+        grid_size = 2
 
-    # Clear the topmost_windows and managed_windows lists before applying settings
-    topmost_windows = []
-    managed_windows = []
+        # Collect windows by type
+        positioned_windows = []
+        auto_windows = []
+        for section in config.sections():
+            pos = config[section].get("position")
+            size = config[section].get("size")
+            if pos:
+                positioned_windows.append(section)
+            else:
+                auto_windows.append(section)
 
-    # Apply window settings
-    all_titles = gw.getAllTitles()
-    for section in config.sections():
-        cleaned_section = clean_title(section)
-
-        for title in all_titles:
-            cleaned_title = clean_title(title)
+        # Calculate auto-layout grid
+        if auto_windows:
+            windows_per_row = min(grid_size, len(auto_windows))
+            window_width = (screen_width - (padding * (windows_per_row + 1))) / windows_per_row
+            window_height = (screen_height - padding * 2) / ((len(auto_windows) + windows_per_row - 1) // windows_per_row)
             
-            if cleaned_section in cleaned_title:
-                window = gw.getWindowsWithTitle(title)[0]
-                hwnd = window._hWnd
-                position, size, always_on_top, titlebar = get_window_settings(section, config)
+            # Track auto-layout position
+            current_x = padding
+            current_y = padding
+            col_count = 0
 
-                # Restore minimized window
-                win32gui.ShowWindow(hwnd, win32con.SW_RESTORE)
-
-                # Apply window settings
+        global topmost_windows, managed_windows
+        # Remove always-on-top status for any current config
+        for hwnd in topmost_windows:
+            try:
+                always_on_top = win32gui.GetWindowLong(hwnd, win32con.GWL_EXSTYLE) & win32con.WS_EX_TOPMOST
                 if always_on_top:
-                    set_always_on_top(hwnd, always_on_top)
-                managed_windows.append(hwnd)  # Add to managed_windows
+                    set_always_on_top(hwnd, False)
+            except Exception as e:
+                print("Failed to toggle always-on-top. Window might be closed.")
 
-                if not titlebar:
-                    remove_titlebar(hwnd)
+        # Clear the topmost_windows and managed_windows lists before applying settings
+        topmost_windows = []
+        managed_windows = []
 
-                # Apply size if specified
-                if size:
-                    window.resizeTo(size[0], size[1])
+        # Apply window settings
+        all_titles = gw.getAllTitles()
+        for section in config.sections():
+            cleaned_section = clean_title(section)
 
-                # Apply position - either configured or auto-layout
-                if position:
-                    window.moveTo(position[0], position[1])
-                elif section in auto_windows:
-                    # Use auto-layout position
-                    window.moveTo(int(current_x), int(current_y))
-                    
-                    # Move to next position
-                    col_count += 1
-                    if col_count >= windows_per_row:
-                        col_count = 0
-                        current_x = padding
-                        current_y += window_height + padding
-                    else:
-                        current_x += window_width + padding
+            for title in all_titles:
+                cleaned_title = clean_title(title)
+                
+                if cleaned_section in cleaned_title:
+                    window = gw.getWindowsWithTitle(title)[0]
+                    hwnd = window._hWnd
+                    position, size, always_on_top, titlebar = get_window_settings(section, config)
 
-                break
-    
-    # Update topmost_windows list
-    topmost_windows[:] = [
-        hwnd for hwnd in managed_windows
-        if any(
-            clean_title(section) in clean_title(gw.getWindowsWithTitle(win32gui.GetWindowText(hwnd))[0].title)
-            and config.has_section(section)
-            and config.getboolean(section, "always_on_top", fallback=False)
-            for section in config.sections()
-        )
-    ]
-    update_always_on_top_status()
-    return True
+                    # Restore minimized window
+                    win32gui.ShowWindow(hwnd, win32con.SW_RESTORE)
+
+                    # Apply window settings
+                    if always_on_top:
+                        try:
+                            set_always_on_top(hwnd, always_on_top)
+                        except Exception as e:
+                            print(f"Error setting always on top for hwnd: {hwnd}, error: {e}")
+                            import traceback
+                            traceback.print_exc()
+                    managed_windows.append(hwnd)  # Add to managed_windows
+
+                    if not titlebar:
+                        try:
+                            remove_titlebar(hwnd)
+                        except Exception as e:
+                            print(f"Error removing titlebar for hwnd: {hwnd}, error: {e}")
+                            import traceback
+                            traceback.print_exc()
+
+                    # Apply size if specified
+                    if size:
+                        try:
+                            window.resizeTo(size[0], size[1])
+                        except Exception as e:
+                            print(f"Error resizing window for hwnd: {hwnd}, error: {e}")
+                            import traceback
+                            traceback.print_exc()
+
+                    # Apply position - either configured or auto-layout
+                    if position:
+                        try:
+                            window.moveTo(position[0], position[1])
+                        except Exception as e:
+                            print(f"Error moving window for hwnd: {hwnd}, error: {e}")
+                            import traceback
+                            traceback.print_exc()
+                    elif section in auto_windows:
+                        # Use auto-layout position
+                        try:
+                            window.moveTo(int(current_x), int(current_y))
+                        except Exception as e:
+                            print(f"Error moving window for hwnd: {hwnd}, error: {e}")
+                            import traceback
+                            traceback.print_exc()
+                        
+                        # Move to next position
+                        col_count += 1
+                        if col_count >= windows_per_row:
+                            col_count = 0
+                            current_x = padding
+                            current_y += window_height + padding
+                        else:
+                            current_x += window_width + padding
+
+                    break
+        
+        # Update topmost_windows list
+        topmost_windows[:] = [
+            hwnd for hwnd in managed_windows
+            if any(
+                clean_title(section) in clean_title(gw.getWindowsWithTitle(win32gui.GetWindowText(hwnd))[0].title)
+                and config.has_section(section)
+                and config.getboolean(section, "always_on_top", fallback=False)
+                for section in config.sections()
+            )
+        ]
+        update_always_on_top_status()
+        return True
+    except Exception as e:
+        print(f"Error applying configured windows: {e}")
+        import traceback
+        traceback.print_exc()
+        return False
 
 def set_always_on_top(hwnd, enable):
     try:
@@ -210,17 +274,41 @@ def set_always_on_top(hwnd, enable):
         win32gui.SetWindowPos(hwnd, flag, 0, 0, 0, 0, win32con.SWP_NOMOVE | win32con.SWP_NOSIZE | win32con.SWP_NOOWNERZORDER)
         if enable and hwnd not in topmost_windows:
             topmost_windows.append(hwnd)
+            print(f"Added hwnd {hwnd} to topmost_windows")
         elif not enable and hwnd in topmost_windows:
             topmost_windows.remove(hwnd)
+            print(f"Removed hwnd {hwnd} from topmost_windows")
         update_always_on_top_status()
     except Exception as e:
         print(f"Error setting always on top for hwnd: {hwnd}, enable: {enable}, error: {e}")
+        import traceback
+        traceback.print_exc()
 
 def remove_titlebar(hwnd):
     style = win32gui.GetWindowLong(hwnd, win32con.GWL_STYLE)
-    style &= ~win32con.WS_CAPTION
-    win32gui.SetWindowLong(hwnd, win32con.GWL_STYLE, style)
-    win32gui.SetWindowPos(hwnd, 0, 0, 0, 0, 0, win32con.SWP_NOMOVE | win32con.SWP_NOSIZE | win32con.SWP_FRAMECHANGED)
+    try:
+        style &= ~win32con.WS_CAPTION
+        win32gui.SetWindowLong(hwnd, win32con.GWL_STYLE, style)
+        win32gui.SetWindowPos(hwnd, 0, 0, 0, 0, 0, win32con.SWP_NOMOVE | win32con.SWP_NOSIZE | win32con.SWP_FRAMECHANGED)
+    except Exception as e:
+        print(f"Error removing titlebar for hwnd: {hwnd}, error: {e}")
+        import traceback
+        traceback.print_exc()
+
+def restore_titlebar(hwnd):
+    try:
+        style = win32gui.GetWindowLong(hwnd, win32con.GWL_STYLE)
+        # Check if WS_CAPTION is already present to avoid adding it multiple times
+        if not (style & win32con.WS_CAPTION):
+            style |= win32con.WS_CAPTION
+            win32gui.SetWindowLong(hwnd, win32con.GWL_STYLE, style)
+            # Force redraw to show the title bar
+            win32gui.SetWindowPos(hwnd, 0, 0, 0, 0, 0, win32con.SWP_NOMOVE | win32con.SWP_NOSIZE | win32con.SWP_FRAMECHANGED | win32con.SWP_SHOWWINDOW)
+            print(f"Restored titlebar for hwnd: {hwnd}")
+    except Exception as e:
+        print(f"Error restoring titlebar for hwnd: {hwnd}, error: {e}")
+        import traceback
+        traceback.print_exc()
 
 def toggle_always_on_top():
     global config
@@ -237,20 +325,78 @@ def toggle_always_on_top():
             print("Failed to toggle always-on-top. Window might be closed.")
     update_always_on_top_status()
 
-def exit_script():
-    global config  # Use the global config variable
-    for hwnd in topmost_windows:
+def start_window_selection(widget):
+    global waiting_for_window_selection, status_label, app, periodic_check_lock
+    global apply_button, select_window_button, toggle_button, config_dropdown
+
+    waiting_for_window_selection = True
+    status_label.text = "Click on the target window..."
+
+    # Disable buttons while selecting
+    apply_button.enabled = False
+    select_window_button.enabled = False
+    toggle_button.enabled = False
+    config_dropdown.enabled = False
+
+    # Stop periodic check if running
+    if hasattr(app, 'periodic_check_task') and app.periodic_check_task and not app.periodic_check_task.done():
+        app.periodic_check_task.cancel()
+        # Ensure the lock is released if the task was cancelled mid-operation
+        if periodic_check_lock.locked():
+             periodic_check_lock.release()
+
+    # Reset any currently applied settings
+    reset_all_managed_windows()
+
+    # Start listening for the click in a separate thread
+    # Using a thread because Toga's main loop might block win32api calls
+    click_listener_thread = threading.Thread(target=listen_for_window_click, daemon=True)
+    click_listener_thread.start()
+
+def reset_all_managed_windows():
+    global managed_windows, topmost_windows
+
+    # Combine lists and remove duplicates
+    all_hwnds_to_reset = list(set(managed_windows + topmost_windows))
+
+    for hwnd in all_hwnds_to_reset:
         try:
-            always_on_top = win32gui.GetWindowLong(hwnd, win32con.GWL_EXSTYLE) & win32con.WS_EX_TOPMOST
-            if always_on_top:
-                set_always_on_top(hwnd, False)
+            if not win32gui.IsWindow(hwnd):
+                continue
+
+            # Reset Always on Top
+            if win32gui.GetWindowLong(hwnd, win32con.GWL_EXSTYLE) & win32con.WS_EX_TOPMOST:
+                set_always_on_top(hwnd, False) # set_always_on_top handles removal from topmost_windows
+
+            # Restore Titlebar (check if it was removed by looking for WS_CAPTION)
+            style = win32gui.GetWindowLong(hwnd, win32con.GWL_STYLE)
+            if not (style & win32con.WS_CAPTION):
+                 restore_titlebar(hwnd)
+
         except Exception as e:
-            print("Failed to toggle always-on-top. Window might be closed.")
-    
-    # Stop the periodic check timer if it is running
+            print(f"Error resetting window {hwnd}: {e}")
+            # Continue with the next window
+
+    # Clear the lists after processing
+    managed_windows = []
+    topmost_windows = [] # set_always_on_top should have cleared this, but clear again just in case
+    update_always_on_top_status() # Update the status label
+
+def exit_script():
+    global app
+
+#    for hwnd in topmost_windows:
+#        try:
+#            always_on_top = win32gui.GetWindowLong(hwnd, win32con.GWL_EXSTYLE) & win32con.WS_EX_TOPMOST
+#            if always_on_top:
+#                set_always_on_top(hwnd, False)
+#        except Exception as e:
+#            print("Failed to toggle always-on-top. Window might be closed.")
+
+    # Stop the periodic check
     if hasattr(app, 'periodic_check_task') and app.periodic_check_task:
         app.periodic_check_task.cancel()
-    
+
     os._exit(0)
 
 # Check if windows exist
@@ -280,54 +426,213 @@ def update_window_status(config, existing_windows, missing_windows):
         config_draw(screen_canvas.context, screen_canvas.style.width, screen_canvas.style.height)
         screen_canvas.refresh()
 
+def listen_for_window_click():
+    global waiting_for_window_selection, selected_window_hwnd, app
+
+    # Get the HWND of our Toga application window to ignore clicks on it
+    app_hwnd = None
+    try:
+        # Attempt to find the main visible Toga window by title
+        toga_windows = gw.getWindowsWithTitle(app.formal_name)
+        if toga_windows:
+            for win in toga_windows:
+                # Ensure it's a top-level, visible window
+                if win32gui.IsWindowVisible(win._hWnd) and win32gui.GetParent(win._hWnd) == 0:
+                    app_hwnd = win._hWnd
+                    break
+        if not app_hwnd:
+             print("Warning: Could not reliably get Toga window handle. Self-clicks might still be registered.")
+
+    except Exception as e:
+        print(f"Error getting Toga window handle: {e}")
+        app_hwnd = None # Proceed without it if error occurs
+
+    while waiting_for_window_selection:
+        # Check for left mouse button down state (VK_LBUTTON = 0x01)
+        # GetAsyncKeyState returns a short integer. The high-order bit indicates if the key is down.
+        if win32api.GetAsyncKeyState(0x01) & 0x8000:
+            # Get cursor position and the window handle at that position
+            cursor_pos = win32gui.GetCursorPos()
+            hwnd_at_cursor = win32gui.WindowFromPoint(cursor_pos)
+
+            # Check if the click is on a valid window and not our app window
+            if hwnd_at_cursor and hwnd_at_cursor != app_hwnd:
+                # Get the top-level parent window
+                root_hwnd = win32gui.GetAncestor(hwnd_at_cursor, win32con.GA_ROOT)
+                if root_hwnd and root_hwnd != app_hwnd:
+                    selected_window_hwnd = root_hwnd
+                    # Schedule the handler to run in the main GUI thread
+                    app.loop.call_soon_threadsafe(handle_window_selection)
+                    break # Exit loop once click is detected
+
+        # Small sleep to prevent high CPU usage
+        time.sleep(0.1)
+
+def handle_window_selection():
+    global waiting_for_window_selection, selected_window_hwnd, status_label, selected_window_name
+    global apply_button, select_window_button, toggle_button, config_dropdown
+
+    waiting_for_window_selection = False # Exit selection mode
+
+    window_modified = False # Flag to track if modifications were applied
+
+    if selected_window_hwnd and win32gui.IsWindow(selected_window_hwnd):
+        try:
+            selected_window_name = win32gui.GetWindowText(selected_window_hwnd)
+            print(f"Window selected: '{selected_window_name}' (HWND: {selected_window_hwnd})")
+
+            # --- Apply modifications ---
+            print(f"Applying Always on Top to {selected_window_hwnd}")
+            set_always_on_top(selected_window_hwnd, True)
+            # Note: set_always_on_top adds to topmost_windows, which might be confusing
+            # as this window isn't managed by a config. We might need to adjust reset logic later if needed.
+
+            print(f"Removing titlebar from {selected_window_hwnd}")
+            remove_titlebar(selected_window_hwnd)
+            # --- End modifications ---
+
+            window_modified = True # Mark as modified
+
+            if status_label:
+                status_label.text = f"Applied to: '{selected_window_name[:30]}...'"
+
+        except Exception as e:
+            print(f"Error getting window title or applying changes: {e}")
+            if status_label: status_label.text = "Error applying changes."
+            # Attempt to reset if modification started but failed? Maybe not necessary here.
+            selected_window_hwnd = None
+            selected_window_name = None
+    else:
+        print("Invalid or no window selected.")
+        if status_label: status_label.text = "Window selection failed or cancelled."
+        selected_window_hwnd = None
+        selected_window_name = None
+
+    # Re-enable buttons and dropdown (safely)
+    if apply_button: apply_button.enabled = True
+    if select_window_button: select_window_button.enabled = True
+    if toggle_button and config:
+         toggle_button.enabled = any(config.getboolean(section, "always_on_top", fallback=False) for section in config.sections())
+    elif toggle_button:
+         toggle_button.enabled = False
+    if config_dropdown: config_dropdown.enabled = True
+
+    # If modifications failed, clear the status label after re-enabling buttons
+    if not window_modified and status_label and status_label.text == "Error applying changes.":
+         # Optionally add a small delay or just clear it
+         # app.loop.call_later(2, lambda: setattr(status_label, 'text', '')) # Example delay
+         pass # Or just leave the error message for a bit
+    elif not window_modified and status_label:
+         status_label.text = "" # Clear if selection failed entirely
+
 # GUI setup
 
 def on_config_select(widget):
     global config  # Use the global config variable
     try:
+        if widget.value not in config_names:
+            return
         selected_config = config_files[config_names.index(widget.value)]
         config = load_config(selected_config)
         if not config:
             print("Error: Could not load configuration.")
             return
-        
+
         existing_windows, missing_windows = check_windows_exist(config)
-        
+
         # Update canvas with window layout
         def config_draw(context, w, h):
             draw_screen_layout(screen_canvas, context, w, h, config, existing_windows, missing_windows)
-            
+
         screen_canvas.draw = config_draw
         config_draw(screen_canvas.context, screen_canvas.style.width, screen_canvas.style.height)
         screen_canvas.refresh()
-        
+        # Re-enable buttons after applying
+        if apply_button: apply_button.enabled = True
+        if select_window_button: select_window_button.enabled = True
+        if config_dropdown: config_dropdown.enabled = True
+        if status_label: status_label.text = "" # Clear status label
+
     except Exception as e:
+        if widget.value not in config_names:
+            return
         print(f"Config selection error: {e}")
         import traceback
         traceback.print_exc()
 
 async def periodic_check_windows_exist():
+    global periodic_check_lock, config, is_dragging
+
     while True:
-        await asyncio.sleep(5)
-        try:
-            existing_windows, missing_windows = check_windows_exist(config)
-            update_window_status(config, existing_windows, missing_windows)
-        except Exception as e:
-            print(f"Periodic check error: {e}")
+        await asyncio.sleep(5)  # Wait 5 seconds before starting the next check
+        async with periodic_check_lock:  # Ensure only one check runs at a time
+            try:
+                if not config:
+                    print("No config applied. Stopping periodic check.")
+                    break
+
+                # Skip the check if a window is being dragged
+                if await is_window_being_dragged():
+                    continue
+
+                # Check windows' existence and update their status
+                existing_windows, missing_windows = check_windows_exist(config)
+                update_window_status(config, existing_windows, missing_windows)
+
+                # Check and fix always-on-top status
+                for hwnd in topmost_windows:
+                    if not win32gui.IsWindow(hwnd):
+                        topmost_windows.remove(hwnd)
+                        continue
+
+                    always_on_top = win32gui.GetWindowLong(hwnd, win32con.GWL_EXSTYLE) & win32con.WS_EX_TOPMOST
+                    for section in config.sections():
+                        if clean_title(section) in clean_title(win32gui.GetWindowText(hwnd)):
+                            expected_status = config[section].getboolean("always_on_top", fallback=False)
+                            if always_on_top != expected_status:
+                                set_always_on_top(hwnd, expected_status)
+            except Exception as e:
+                print(f"Error during periodic check: {e}")
 
 def apply_settings(widget):
-    global config
+    global config, app
+
     selected_config = config_files[config_names.index(config_dropdown.value)]
     config = load_config(selected_config)
     if config:
         apply_configured_windows(config)
+        # Re-enable buttons after applying
+        apply_button.enabled = True
+        select_window_button.enabled = True
+        toggle_button.enabled = True
+        config_dropdown.enabled = True
+        status_label.text = "" # Clear status label
         if topmost_windows:
-            box.add(toggle_button)
+            toggle_button.enabled = True
+        else:
+            toggle_button.enabled = False        
 
         update_always_on_top_status()
 
+        # Start the periodic check for the applied config
+        if hasattr(app, 'periodic_check_task') and app.periodic_check_task:
+            app.periodic_check_task.cancel()  # Cancel any existing periodic check
+        loop = asyncio.get_event_loop()
+        app.periodic_check_task = loop.create_task(periodic_check_windows_exist())
+
 def cancel_settings(widget):
-    exit_script()
+    global waiting_for_window_selection, status_label
+    global apply_button, select_window_button, toggle_button, config_dropdown
+
+    if waiting_for_window_selection:
+        waiting_for_window_selection = False
+
+    reset_all_managed_windows()
+    apply_button.enabled = True
+    select_window_button.enabled = True
+    toggle_button.enabled = True
+    config_dropdown.enabled = True
+    status_label.text = "" # Clear status label
 
 def toggle_always_on_top_button(widget):
     toggle_always_on_top()
@@ -343,7 +648,7 @@ def update_always_on_top_status():
             if win32gui.GetWindowLong(hwnd, win32con.GWL_EXSTYLE) & win32con.WS_EX_TOPMOST:
                 is_enabled = True
                 break
-        status += "Enabled" if is_enabled else "Disabled"
+        status += "Enabled" if is_enabled else "Mixed"
     
     try:
         setattr(always_on_top_status, 'text', status)
@@ -351,6 +656,7 @@ def update_always_on_top_status():
         pass
 
 def draw_screen_layout(canvas, context, w, h, config, existing_windows, missing_windows):
+    # Draws the screen layout on the canvas based on the configuration.
     global screen_width, screen_height
     try:
         # Setup background and border
@@ -387,7 +693,7 @@ def draw_screen_layout(canvas, context, w, h, config, existing_windows, missing_
                 always_on_top = config[section].get("always_on_top", "false").lower() == "true"
                 window_exists = section in existing_windows
                 
-                # Scale to canvas
+                # Scale to canvas to fit the screen
                 scaled_x = (pos_x / screen_width) * usable_width + padding
                 scaled_y = (pos_y / screen_height) * usable_height + padding
                 scaled_w = (size_w / screen_width) * usable_width
@@ -480,15 +786,15 @@ def draw_window_box(context, title, x, y, w, h, real_x, real_y, real_w, real_h, 
         traceback.print_exc()
 
 def create_gui(app):
-    global box, config_dropdown, toggle_button, always_on_top_status, config_files, config_names, screen_canvas, screen_width, screen_height
+    global box, config_dropdown, toggle_button, always_on_top_status, config_files, config_names, screen_canvas, screen_width, screen_height, apply_button, select_window_button, status_label
     get_screen_resolution()
 
     try:
         # Define main container
-        box = toga.Box(style=Pack(direction=COLUMN, margin=10))
+        box = toga.Box(style=Pack(direction=COLUMN, padding=10))
 
         # Create header section
-        header_box = toga.Box(style=Pack(direction=COLUMN, margin=5))
+        header_box = toga.Box(style=Pack(direction=COLUMN, padding=5))
         
         # Define dropdown
         config_files, config_names = list_config_files()
@@ -498,14 +804,14 @@ def create_gui(app):
         config_dropdown = toga.Selection(
             items=config_names, 
             on_change=lambda widget: on_config_select(widget),
-            style=Pack(flex=1, margin=(0,0,5,0))
+            style=Pack(flex=1, padding=(0,0,5,0))
         )
         header_box.add(config_dropdown)
         
         screen_info = f"Screen: {screen_width} x {screen_height}"
         screen_dimensions_label = toga.Label(
             screen_info,
-            style=Pack(margin=(0,0,5,0))
+            style=Pack(padding=(0,0,5,0))
         )
         header_box.add(screen_dimensions_label)
 
@@ -514,7 +820,7 @@ def create_gui(app):
         canvas_width = int(canvas_height * (screen_width/screen_height))
         screen_canvas = toga.Canvas(
             style=Pack(
-                margin=5,
+                padding=5,
                 height=canvas_height,
                 width=canvas_width,
                 flex=1,
@@ -535,38 +841,54 @@ def create_gui(app):
         screen_canvas.refresh()
 
         # Create button container
-        button_box = toga.Box(style=Pack(direction='row', margin=5))
+        button_box = toga.Box(style=Pack(direction='row', padding=5))
 
-        # Define status label
+        # Define status labels
         always_on_top_status = toga.Label(
             "Always-on-Top: Disabled",
-            style=Pack(margin=5)
+            style=Pack(padding=5)
+        )
+        status_label = toga.Label(
+            "",
+            style=Pack(padding=5) # Add some top padding
+        )
+
+        # Define Select Window button
+        select_window_button = toga.Button(
+            'Select Window',
+            on_press=start_window_selection, # We'll define this function next
+            style=Pack(padding=2, flex=1)
         )
 
         # Define buttons
-        apply_button = toga.Button('Apply', on_press=apply_settings, style=Pack(margin=2, flex=1))
-        cancel_button = toga.Button('Cancel', on_press=cancel_settings, style=Pack(margin=2, flex=1))
-        toggle_button = toga.Button('Toggle Always-on-Top', on_press=toggle_always_on_top_button, style=Pack(margin=2))
-        
+        apply_button = toga.Button('Apply config', on_press=apply_settings, style=Pack(padding=2, flex=1))
+        cancel_button = toga.Button('Cancel/reset settings', on_press=cancel_settings, style=Pack(padding=2, flex=1))
+        toggle_button = toga.Button('Toggle Always-on-Top', on_press=toggle_always_on_top_button, style=Pack(padding=2), enabled=False)
+
         button_box.add(apply_button)
         button_box.add(cancel_button)
+        button_box.add(select_window_button)
 
         # Assemble the layout
         box.add(header_box)
         box.add(screen_canvas)
         box.add(button_box)
+        box.add(status_label)
         box.add(always_on_top_status)
+        box.add(toggle_button)
 
         # Configure window
         app.main_window.content = box
         app.main_window.size = (700, 400)
         app.main_window.position = (
-            (screen_width // 2) - (app.main_window.size[0] // 2),
-            (screen_height // 2) - (app.main_window.size[1] // 2)
+            screen_width - app.main_window.size[0],
+            screen_height / 2
+            # (screen_width // 2) - (app.main_window.size[0] // 2),
+            # (screen_height // 2) - (app.main_window.size[1] // 2)
         )
 
         # Set initial value and trigger selection
-        config_dropdown.value = config_names[0]
+        config_dropdown.value = detect_and_set_default_config()
         on_config_select(config_dropdown)
         
         update_always_on_top_status() # Initialize the label
@@ -578,6 +900,27 @@ def create_gui(app):
         traceback.print_exc()
         return None
 
+def detect_and_set_default_config():
+    global config_files, config_names
+
+    # Iterate through all configuration files
+    for config_file in config_files:
+        config = load_config(config_file)
+        if not config:
+            continue
+
+        for section in config.sections():
+            if config[section].getboolean("always_on_top", fallback=False):
+                all_titles = gw.getAllTitles()
+                cleaned_section = clean_title(section)
+
+                for title in all_titles:
+                    cleaned_title = clean_title(title)
+                    if cleaned_section in cleaned_title:
+                        return config_names[config_files.index(config_file)]
+
+    return config_names[0]
+
 def show_menu():
     global app
     app = toga.App('Window Positioner', 'Window Positioner', startup=create_gui)
@@ -585,20 +928,29 @@ def show_menu():
 
 # End of GUI setup
 
+async def is_window_being_dragged():
+    # Detects if a window is being dragged by checking if the left mouse button is pressed and the mouse position is changing.
+    global is_dragging
+    # Check if the left mouse button is pressed
+    if win32api.GetAsyncKeyState(0x01):
+        initial_pos = win32gui.GetCursorPos()
+        await asyncio.sleep(0.1)  # Small delay to check for movement
+        current_pos = win32gui.GetCursorPos()
+
+        # If the mouse position has changed, assume a drag is happening
+        if initial_pos != current_pos:
+            is_dragging = True
+            return True
+    is_dragging = False
+    return False
+
 def main():
     # First check for config_ files
     config_files, _ = list_config_files()
     
     if not config_files:
-        if os.path.exists('config.ini'):
-            print("Found config.ini, applying settings...")
-            config = load_config('config.ini')
-            show_menu() # Running the menu without loop to initialize variables needed for applying the config.
-            if config and apply_configured_windows(config):
-                print("Settings applied successfully")
-                return
-            else:
-                print("Failed to apply settings from config.ini")
+        show_menu().main_loop()
+        return
     
     show_menu().main_loop()
 
