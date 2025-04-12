@@ -1,0 +1,16 @@
+[
+  {
+    "name": "Edge",
+    "title": "Edge",
+    "position": [
+      -7,
+      0
+    ],
+    "size": [
+      1720,
+      1400
+    ],
+    "always_on_top": false,
+    "titlebar": false
+  }
+]

@@ -13,7 +13,7 @@ import time
 import threading
 
 # Global lock for periodic checks
-periodic_check_lock = Lock()
+#periodic_check_lock = Lock()
 
 is_dragging = False
 
@@ -327,7 +327,7 @@ def toggle_always_on_top():
     update_always_on_top_status()
 
 def start_window_selection(widget):
-    global waiting_for_window_selection, status_label, app, periodic_check_lock
+    global waiting_for_window_selection, status_label, app#, periodic_check_lock
     global apply_button, select_window_button, toggle_button, config_dropdown
 
     waiting_for_window_selection = True
@@ -340,11 +340,11 @@ def start_window_selection(widget):
     config_dropdown.enabled = False
 
     # Stop periodic check if running
-    if hasattr(app, 'periodic_check_task') and app.periodic_check_task and not app.periodic_check_task.done():
-        app.periodic_check_task.cancel()
+    #if hasattr(app, 'periodic_check_task') and app.periodic_check_task and not app.periodic_check_task.done():
+    #    app.periodic_check_task.cancel()
         # Ensure the lock is released if the task was cancelled mid-operation
-        if periodic_check_lock.locked():
-             periodic_check_lock.release()
+    #    if periodic_check_lock.locked():
+    #         periodic_check_lock.release()
 
     # Reset any currently applied settings
     reset_all_managed_windows()
@@ -395,8 +395,8 @@ def exit_script():
 #            print("Failed to toggle always-on-top. Window might be closed.")
 
     # Stop the periodic check
-    if hasattr(app, 'periodic_check_task') and app.periodic_check_task:
-        app.periodic_check_task.cancel()
+    #if hasattr(app, 'periodic_check_task') and app.periodic_check_task:
+    #    app.periodic_check_task.cancel()
 
     os._exit(0)
 
@@ -562,6 +562,7 @@ def on_config_select(widget):
         traceback.print_exc()
 
 async def periodic_check_windows_exist():
+    return
     global periodic_check_lock, config, is_dragging
 
     while True:
@@ -616,10 +617,10 @@ def apply_settings(widget):
         update_always_on_top_status()
 
         # Start the periodic check for the applied config
-        if hasattr(app, 'periodic_check_task') and app.periodic_check_task:
-            app.periodic_check_task.cancel()  # Cancel any existing periodic check
-        loop = asyncio.get_event_loop()
-        app.periodic_check_task = loop.create_task(periodic_check_windows_exist())
+        #if hasattr(app, 'periodic_check_task') and app.periodic_check_task:
+        #    app.periodic_check_task.cancel()  # Cancel any existing periodic check
+        #loop = asyncio.get_event_loop()
+        #app.periodic_check_task = loop.create_task(periodic_check_windows_exist())
 
 def cancel_settings(widget):
     global waiting_for_window_selection, status_label
