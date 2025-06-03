@@ -4,69 +4,27 @@ import win32gui
 import win32con
 import configparser
 import os
+import sys
 import re
 import toga
-from toga.style.pack import COLUMN, Pack
+from toga.style.pack import COLUMN, Pack, BOLD, SERIF, SANS_SERIF, ROW
 import asyncio
 from asyncio import Lock
 import time
 import threading
 
-# Global lock for periodic checks
-#periodic_check_lock = Lock()
+def restart_as_admin(widget):
+    if sys.platform == "win32":
+        import ctypes
+        params = " ".join([f'"{arg}"' for arg in sys.argv])
+        # ShellExecuteW returns >32 if successful
+        rc = ctypes.windll.shell32.ShellExecuteW(
+            None, "runas", sys.executable, params, None, 1
+        )
+        if rc > 32:
+            os._exit(0)
 
 is_dragging = False
-
-"""
-Window Positioner - Manage window layouts and apply manual overrides
-
-This script provides a GUI to:
-1. Load and apply window layout configurations (position, size, always-on-top, title bar)
-   from '.ini' files.
-2. Manually select any window to make it always-on-top and remove its title bar.
-
-Features:
-- Load and apply window configurations from 'config_*.ini' files.
-- Visual preview of the selected configuration's layout.
-- Periodic check to maintain the state of configured windows (when a config is applied).
-- Manually select any window via button click to make it Always-on-Top and remove its title bar.
-- Reset all applied settings (config or manual) using the 'Cancel/reset settings' button.
-- Toggle Always-on-Top state specifically for windows managed by the *currently applied config*.
-- Support for multiple configuration files.
-
-Usage:
-1. Place configuration files named 'config_<name>.ini' in the program directory.
-2. Select a configuration from the dropdown menu to preview its layout.
-3. Click 'Apply config' to activate the window layout defined in the selected config file.
-   - A periodic check starts to maintain the state of these configured windows.
-4. Click 'Select Window', then click on any target window on your screen.
-   - This makes the selected window Always-on-Top and removes its title bar.
-   - Entering selection mode stops any active configuration and periodic checks, and resets previously managed windows.
-   - Applying a config or selecting a *new* window resets the previously *manually* selected one.
-5. Click 'Cancel/reset settings':
-   - If in 'Select Window' mode, it cancels the selection process.
-   - It resets *all* windows currently managed (by config or manual selection) to their default state (Always-on-Top removed, title bar restored).
-   - It re-enables all buttons.
-6. Use 'Toggle Always-on-Top' to change the state of windows managed by the *currently applied config*. (Button is enabled only when a config with always-on-top windows is active).
-
-Configuration Format (config_*.ini):
-[Window Title]
-position = x,y              # Window position (optional)
-size = width,height         # Window size (optional)
-always_on_top = true/false  # Set always-on-top state (optional, default false)
-titlebar = true/false       # Keep title bar (optional, default true)
-
-Example:
-[Microsoft Edge]
-position = 0,0
-size = 1760,1400
-always_on_top = true
-titlebar = false
-
-Notes:
-- Windows without position/size in config will be auto-arranged based on screen size.
-- Window titles in config are matched partially and case-insensitively against open windows.
-"""
 
 # globals
 config = None
@@ -77,6 +35,15 @@ status_label = None
 waiting_for_window_selection = False
 selected_window_hwnd = None
 
+if getattr(sys, 'frozen', False):
+    base_path = os.path.dirname(sys.executable)
+else:
+    base_path = os.path.dirname(os.path.abspath(__file__))
+
+config_dir = os.path.join(base_path, "configs")
+if not os.path.exists(config_dir):
+    os.makedirs(config_dir)
+
 def get_screen_resolution():
     global screen_width, screen_height
 #    max_screen_height = 0
@@ -86,7 +53,7 @@ def get_screen_resolution():
         screen_height = app.screens[0].size[1]
 
 def list_config_files():
-    config_files = [f for f in os.listdir() if f.startswith("config_") and f.endswith(".ini")]
+    config_files = [f for f in os.listdir(config_dir) if f.startswith("config_") and f.endswith(".ini")]
     config_files.sort()
     config_names = [f[7:-4] for f in config_files]
     return config_files, config_names
@@ -94,8 +61,8 @@ def list_config_files():
 def load_config(config_path):
     config = configparser.ConfigParser()
     try:
-        if os.path.exists(config_path):
-            config.read(config_path)
+        if os.path.exists(os.path.join(config_dir, config_path)):
+            config.read(os.path.join(config_dir, config_path))
             return config
         return None
     except Exception as e:
@@ -275,10 +242,10 @@ def set_always_on_top(hwnd, enable):
         win32gui.SetWindowPos(hwnd, flag, 0, 0, 0, 0, win32con.SWP_NOMOVE | win32con.SWP_NOSIZE | win32con.SWP_NOOWNERZORDER)
         if enable and hwnd not in topmost_windows:
             topmost_windows.append(hwnd)
-            print(f"Added hwnd {hwnd} to topmost_windows")
+            #print(f"Added hwnd {hwnd} to topmost_windows")
         elif not enable and hwnd in topmost_windows:
             topmost_windows.remove(hwnd)
-            print(f"Removed hwnd {hwnd} from topmost_windows")
+            #print(f"Removed hwnd {hwnd} from topmost_windows")
         update_always_on_top_status()
     except Exception as e:
         print(f"Error setting always on top for hwnd: {hwnd}, enable: {enable}, error: {e}")
@@ -305,7 +272,7 @@ def restore_titlebar(hwnd):
             win32gui.SetWindowLong(hwnd, win32con.GWL_STYLE, style)
             # Force redraw to show the title bar
             win32gui.SetWindowPos(hwnd, 0, 0, 0, 0, 0, win32con.SWP_NOMOVE | win32con.SWP_NOSIZE | win32con.SWP_FRAMECHANGED | win32con.SWP_SHOWWINDOW)
-            print(f"Restored titlebar for hwnd: {hwnd}")
+            #print(f"Restored titlebar for hwnd: {hwnd}")
     except Exception as e:
         print(f"Error restoring titlebar for hwnd: {hwnd}, error: {e}")
         import traceback
@@ -327,7 +294,7 @@ def toggle_always_on_top():
     update_always_on_top_status()
 
 def start_window_selection(widget):
-    global waiting_for_window_selection, status_label, app#, periodic_check_lock
+    global waiting_for_window_selection, status_label, app
     global apply_button, select_window_button, toggle_button, config_dropdown
 
     waiting_for_window_selection = True
@@ -338,13 +305,6 @@ def start_window_selection(widget):
     select_window_button.enabled = False
     toggle_button.enabled = False
     config_dropdown.enabled = False
-
-    # Stop periodic check if running
-    #if hasattr(app, 'periodic_check_task') and app.periodic_check_task and not app.periodic_check_task.done():
-    #    app.periodic_check_task.cancel()
-        # Ensure the lock is released if the task was cancelled mid-operation
-    #    if periodic_check_lock.locked():
-    #         periodic_check_lock.release()
 
     # Reset any currently applied settings
     reset_all_managed_windows()
@@ -385,19 +345,6 @@ def reset_all_managed_windows():
 
 def exit_script():
     global app
-
-#    for hwnd in topmost_windows:
-#        try:
-#            always_on_top = win32gui.GetWindowLong(hwnd, win32con.GWL_EXSTYLE) & win32con.WS_EX_TOPMOST
-#            if always_on_top:
-#                set_always_on_top(hwnd, False)
-#        except Exception as e:
-#            print("Failed to toggle always-on-top. Window might be closed.")
-
-    # Stop the periodic check
-    #if hasattr(app, 'periodic_check_task') and app.periodic_check_task:
-    #    app.periodic_check_task.cancel()
-
     os._exit(0)
 
 # Check if windows exist
@@ -480,15 +427,15 @@ def handle_window_selection():
     if selected_window_hwnd and win32gui.IsWindow(selected_window_hwnd):
         try:
             selected_window_name = win32gui.GetWindowText(selected_window_hwnd)
-            print(f"Window selected: '{selected_window_name}' (HWND: {selected_window_hwnd})")
+            #print(f"Window selected: '{selected_window_name}' (HWND: {selected_window_hwnd})")
 
             # --- Apply modifications ---
-            print(f"Applying Always on Top to {selected_window_hwnd}")
+            #print(f"Applying Always on Top to {selected_window_hwnd}")
             set_always_on_top(selected_window_hwnd, True)
             # Note: set_always_on_top adds to topmost_windows, which might be confusing
             # as this window isn't managed by a config. We might need to adjust reset logic later if needed.
 
-            print(f"Removing titlebar from {selected_window_hwnd}")
+            #print(f"Removing titlebar from {selected_window_hwnd}")
             remove_titlebar(selected_window_hwnd)
             # --- End modifications ---
 
@@ -561,40 +508,6 @@ def on_config_select(widget):
         import traceback
         traceback.print_exc()
 
-async def periodic_check_windows_exist():
-    return
-    global periodic_check_lock, config, is_dragging
-
-    while True:
-        await asyncio.sleep(5)  # Wait 5 seconds before starting the next check
-        async with periodic_check_lock:  # Ensure only one check runs at a time
-            try:
-                if not config:
-                    print("No config applied. Stopping periodic check.")
-                    break
-
-                # Skip the check if a window is being dragged
-                if await is_window_being_dragged():
-                    continue
-
-                # Check windows' existence and update their status
-                existing_windows, missing_windows = check_windows_exist(config)
-                update_window_status(config, existing_windows, missing_windows)
-
-                # Check and fix always-on-top status
-                for hwnd in topmost_windows:
-                    if not win32gui.IsWindow(hwnd):
-                        topmost_windows.remove(hwnd)
-                        continue
-
-                    always_on_top = win32gui.GetWindowLong(hwnd, win32con.GWL_EXSTYLE) & win32con.WS_EX_TOPMOST
-                    for section in config.sections():
-                        if clean_title(section) in clean_title(win32gui.GetWindowText(hwnd)):
-                            expected_status = config[section].getboolean("always_on_top", fallback=False)
-                            if always_on_top != expected_status:
-                                set_always_on_top(hwnd, expected_status)
-            except Exception as e:
-                print(f"Error during periodic check: {e}")
 
 def apply_settings(widget):
     global config, app
@@ -615,12 +528,6 @@ def apply_settings(widget):
             toggle_button.enabled = False        
 
         update_always_on_top_status()
-
-        # Start the periodic check for the applied config
-        #if hasattr(app, 'periodic_check_task') and app.periodic_check_task:
-        #    app.periodic_check_task.cancel()  # Cancel any existing periodic check
-        #loop = asyncio.get_event_loop()
-        #app.periodic_check_task = loop.create_task(periodic_check_windows_exist())
 
 def cancel_settings(widget):
     global waiting_for_window_selection, status_label
@@ -662,10 +569,18 @@ def draw_screen_layout(canvas, context, w, h, config, existing_windows, missing_
     global screen_width, screen_height
     try:
         # Setup background and border
-        with context.Fill(color='white') as fill:
+        with context.Fill(color='#303030') as fill:
             fill.rect(0, 0, w, h)
         with context.Stroke(color='black', line_width=2) as stroke:
-            stroke.rect(5, 5, w-10, h-10)
+            stroke.rect(2, 2, w-2, h-2)
+        
+        # Draw Windows taskbar (48px high) at the bottom
+        taskbar_height = 48
+        scaled_taskbar_height = (taskbar_height / screen_height) * h
+        with context.Fill(color='#222222') as fill:
+            fill.rect(0, h - scaled_taskbar_height, w, scaled_taskbar_height)
+        with context.Stroke(color='#222222', line_width=1) as stroke:
+            stroke.rect(0, h - scaled_taskbar_height, w, scaled_taskbar_height)
         
         if not config or not config.sections():
             return
@@ -749,9 +664,9 @@ def draw_screen_layout(canvas, context, w, h, config, existing_windows, missing_
 def draw_window_box(context, title, x, y, w, h, real_x, real_y, real_w, real_h, always_on_top, window_exists):
     try:
         # Draw box
-        with context.Fill(color='lightblue' if not always_on_top else 'lightgreen') as fill:
+        with context.Fill(color="blue" if not always_on_top else 'green') as fill:
             fill.rect(x, y, w, h)
-        with context.Stroke(color='blue' if not always_on_top else 'green') as stroke:
+        with context.Stroke(color='darkblue' if not always_on_top else 'darkgreen') as stroke:
             stroke.rect(x, y, w, h)
         
         # Text layout parameters
@@ -766,21 +681,22 @@ def draw_window_box(context, title, x, y, w, h, real_x, real_y, real_w, real_h, 
         # Draw text lines
         text_lines = [
             title,
-            f"Position: {pos_text}",
-            f"Size: {size_text}",
-            f"Always-on-top: {'Yes' if always_on_top else 'No'}"
+            f"Position:\n{pos_text}",
+            f"\nSize:\n{size_text}",
+            f"\n\nAlways-on-top:\n{'Yes' if always_on_top else 'No'}"
         ]
         
+        my_font = toga.Font(SANS_SERIF, 10, weight=BOLD)
         # Draw lines
         for i, line in enumerate(text_lines):
             y_pos = text_y + (i * line_height)
-            with context.Fill(color='rgba(0, 0, 0, 1)') as fill:
-                fill.write_text(line, text_x, y_pos)
+            with context.Fill(color="#FFFFFF") as fill:
+                fill.write_text(line, text_x, y_pos, font=my_font)
         
         # Add missing text if window is not found
         if not window_exists:
             with context.Fill(color='red') as fill:
-                fill.write_text("\nMissing", text_x, text_y + (len(text_lines) * line_height))
+                fill.write_text("\n\n\n\n\nMissing", text_x, text_y + (len(text_lines) * line_height), font=my_font)
         
     except Exception as e:
         print(f"Error drawing window box: {str(e)}")
@@ -793,27 +709,29 @@ def create_gui(app):
 
     try:
         # Define main container
-        box = toga.Box(style=Pack(direction=COLUMN, padding=10))
+        box = toga.Box(style=Pack(direction=COLUMN, margin=10))
 
         # Create header section
-        header_box = toga.Box(style=Pack(direction=COLUMN, padding=5))
+        header_box = toga.Box(style=Pack(direction=COLUMN, margin=5))
         
         # Define dropdown
         config_files, config_names = list_config_files()
         if not config_files:
-            raise ValueError("No configuration files found")
+            print("No configuration files found")
+            config_files = ['No config found']
+            config_names = ['No config found']
             
         config_dropdown = toga.Selection(
             items=config_names, 
             on_change=lambda widget: on_config_select(widget),
-            style=Pack(flex=1, padding=(0,0,5,0))
+            style=Pack(flex=1, margin=(0,0,5,0))
         )
         header_box.add(config_dropdown)
         
         screen_info = f"Screen: {screen_width} x {screen_height}"
         screen_dimensions_label = toga.Label(
             screen_info,
-            style=Pack(padding=(0,0,5,0))
+            style=Pack(margin=(0,0,5,0))
         )
         header_box.add(screen_dimensions_label)
 
@@ -822,11 +740,11 @@ def create_gui(app):
         canvas_width = int(canvas_height * (screen_width/screen_height))
         screen_canvas = toga.Canvas(
             style=Pack(
-                padding=5,
+                margin=5,
                 height=canvas_height,
                 width=canvas_width,
                 flex=1,
-                background_color='#cccccc'
+                background_color="#303030"
             )
         )
         
@@ -843,39 +761,75 @@ def create_gui(app):
         screen_canvas.refresh()
 
         # Create button container
-        button_box = toga.Box(style=Pack(direction='row', padding=5))
+        button_box = toga.Box(style=Pack(direction='row', margin=5))
 
         # Define status labels
         always_on_top_status = toga.Label(
             "Always-on-Top: Disabled",
-            style=Pack(padding=5)
+            style=Pack(margin=5)
         )
         status_label = toga.Label(
             "",
-            style=Pack(padding=5) # Add some top padding
+            style=Pack(margin=5) # Add some top padding
         )
 
         # Define Select Window button
         select_window_button = toga.Button(
             'Select Window',
             on_press=start_window_selection, # We'll define this function next
-            style=Pack(padding=2, flex=1)
+            style=Pack(margin=2, flex=1)
         )
 
         # Define buttons
-        apply_button = toga.Button('Apply config', on_press=apply_settings, style=Pack(padding=2, flex=1))
-        cancel_button = toga.Button('Cancel/reset settings', on_press=cancel_settings, style=Pack(padding=2, flex=1))
-        toggle_button = toga.Button('Toggle Always-on-Top', on_press=toggle_always_on_top_button, style=Pack(padding=2), enabled=False)
+        apply_button = toga.Button('Apply config', on_press=apply_settings, style=Pack(margin=2, flex=1))
+        cancel_button = toga.Button('Cancel/reset settings', on_press=cancel_settings, style=Pack(margin=2, flex=1))
+        toggle_button = toga.Button('Toggle Always-on-Top', on_press=toggle_always_on_top_button, style=Pack(margin=2), enabled=False)
 
         button_box.add(apply_button)
         button_box.add(cancel_button)
         button_box.add(select_window_button)
 
+        # Define Create Config button
+        create_config_button = toga.Button(
+            'Create Config',
+            on_press=create_config, # We'll define this function next
+            style=Pack(margin=2, flex=1)
+        )
+        button_box.add(create_config_button)
+
+        # Define open config folder button
+        def open_config_folder(widget):
+            try:
+                os.startfile(config_dir)  # Open the configuration directory
+            except Exception as e:
+                print(f"Error opening config folder: {e}")
+                import traceback
+                traceback.print_exc()
+        
+        open_config_button = toga.Button('Open Config Folder', on_press=open_config_folder, style=Pack(margin=2, flex=1))
+        button_box.add(open_config_button)
+
+        # Define restart as admin button
+        admin_status = is_running_as_admin()
+        restart_as_admin_button = toga.Button(
+            'Restart as Admin',
+            on_press=restart_as_admin,
+            style=Pack(margin=2, flex=1),
+            enabled=not admin_status
+        )
+        button_box.add(restart_as_admin_button)
+
+        # Add admin indicator label
+        admin_label = toga.Label(
+            "Running with Administrator permissions" if admin_status else "Running with User permissions",
+            style=Pack(margin=5, color="green" if admin_status else "red")
+        )
+        box.add(admin_label)
+
         # Assemble the layout
         box.add(header_box)
         box.add(screen_canvas)
         box.add(button_box)
-        box.add(status_label)
         box.add(always_on_top_status)
         box.add(toggle_button)
 
@@ -885,8 +839,6 @@ def create_gui(app):
         app.main_window.position = (
             screen_width - app.main_window.size[0],
             screen_height / 2
-            # (screen_width // 2) - (app.main_window.size[0] // 2),
-            # (screen_height // 2) - (app.main_window.size[1] // 2)
         )
 
         # Set initial value and trigger selection
@@ -928,6 +880,183 @@ def show_menu():
     app = toga.App('Window Positioner', 'Window Positioner', startup=create_gui)
     return app
 
+def create_config(widget):
+    #print("Create config button pressed")
+    # Create a new window
+    create_config_window = toga.Window(title="Create Config")
+
+    # Get the main window position
+    main_window_x = app.main_window.position[0]
+    main_window_y = app.main_window.position[1]
+
+    # Set the new window position
+    create_config_window.position = (main_window_x + 20, main_window_y + 20)
+
+    # Get a list of currently open windows
+    all_titles = gw.getAllTitles()
+    window_list = [title for title in all_titles if title]
+
+    # Create a main box to hold all window elements
+    main_box = toga.Box(style=Pack(direction=COLUMN, margin=10))
+
+    # Store the selected windows in a global variable
+    global selected_windows_for_config
+    selected_windows_for_config = []
+
+    # Create a box to hold the switches
+    switch_box = toga.Box(style=Pack(direction=COLUMN, margin=5))
+
+    # Create a switch for each window
+    window_switches = {}
+    for window_title in window_list:
+        switch = toga.Switch(window_title, style=Pack(margin=5))
+        window_switches[window_title] = switch
+        switch_box.add(switch)
+
+    # Add the switch box to the main box
+    main_box.add(switch_box)
+
+    # Add a button to confirm the selection
+    def confirm_selection(widget):
+        selected_windows = []
+        for window_title, switch in window_switches.items():
+            if switch.value:
+                selected_windows.append(window_title)
+
+        if len(selected_windows) > 4:
+            print("You can only select up to 4 windows.")
+            return
+
+        # Store the selected windows in a global variable
+        global selected_windows_for_config
+        selected_windows_for_config = selected_windows
+
+        # Create a main box to hold all window settings
+        settings_box = toga.Box(style=Pack(direction=COLUMN, margin=10))
+
+        # Create a box for each selected window
+        window_settings = {}
+        for window_title in selected_windows:
+            app_box = toga.Box(style=Pack(direction=COLUMN, margin=5))
+            window_settings[window_title] = app_box
+
+            # Add a label to display the window title
+            title_input = toga.TextInput(value=clean_title(window_title), style=Pack(margin=5))
+            app_box.add(title_input)
+
+            # Get the position and size of the window
+            try:
+                w_position = gw.getWindowsWithTitle(window_title)[0].topleft
+                w_size = gw.getWindowsWithTitle(window_title)[0].size
+            except IndexError:
+                w_position = (0, 0)
+                w_size = (100, 100)
+
+            window_box = toga.Box(style=Pack(direction=ROW, margin=5))
+            
+            # Add input fields to adjust the size and position
+            size_label = toga.Label("Size (width, height):", style=Pack(margin=5))
+            size_input = toga.TextInput(value=f'{w_size.width},{w_size.height}', style=Pack(margin=0))
+            window_box.add(size_label)
+            window_box.add(size_input)
+
+            position_label = toga.Label("Position (x, y):", style=Pack(margin=5))
+            position_input = toga.TextInput(value=f'{w_position.x},{w_position.y}', style=Pack(margin=0))
+            window_box.add(position_label)
+            window_box.add(position_input)
+
+            # Add switches to toggle AOT and titlebar settings
+            aot_switch = toga.Switch("Always on Top", style=Pack(margin=5))
+            window_box.add(aot_switch)
+
+            titlebar_switch = toga.Switch("Titlebar", style=Pack(margin=5), value=True)
+            window_box.add(titlebar_switch)
+
+            app_box.add(window_box)
+
+            # Add the window box to the main box
+            settings_box.add(app_box)
+
+        def save_config(widget):
+            # Get the values from the input fields and switches for each selected window
+            config_data = {}
+            for i, window_title in enumerate(selected_windows_for_config):
+                window_box = window_settings[window_title]
+                title_input = window_box.children[0]
+                size_input = window_box.children[2]
+                position_input = window_box.children[4]
+                aot_switch = window_box.children[5]
+                titlebar_switch = window_box.children[6]
+
+                config_data[title_input.value] = {
+                    "size": size_input.value,
+                    "position": position_input.value,
+                    "always_on_top": aot_switch.value,
+                    "titlebar": titlebar_switch.value,
+                }
+
+            # Create a new ConfigParser object
+            config = configparser.ConfigParser()
+
+            # Add a section for each selected window to the ConfigParser object
+            for window_title, settings in config_data.items():
+                config.add_section(window_title)
+                config.set(window_title, "size", str(settings["size"]))
+                config.set(window_title, "position", str(settings["position"]))
+                config.set(window_title, "always_on_top", str(settings["always_on_top"]))
+                config.set(window_title, "titlebar", str(settings["titlebar"]))
+
+            filepath = filename_input.value
+            if not filepath:
+                async def show_dialog():
+                    dlg = toga.ErrorDialog("Error", "Config name cannot be empty.")
+                    await dlg._show(create_config_window)
+                asyncio.ensure_future(show_dialog())
+                return
+            if not filepath.startswith("config_"):
+                filepath = "config_" + filepath
+            if not filepath.endswith(".ini"):
+                filepath += ".ini"
+
+            # Save the configuration to the new file
+            try:
+                with open(os.path.join(config_dir, filepath), "w") as configfile:
+                    config.write(configfile)
+                print(f"Configuration saved to {filepath}")
+            except Exception as e:
+                print(f"Error saving configuration: {e}")
+            
+            # Refresh the config dropdown
+            global config_files, config_names
+            config_files, config_names = list_config_files()
+            config_dropdown.items = config_names
+
+            create_config_window.close()
+
+        # Add filename input
+        filename_label = toga.Label("Enter config name:", style=Pack(margin=5))
+        filename_input = toga.TextInput(style=Pack(margin=5))
+        settings_box.add(filename_label)
+        settings_box.add(filename_input)
+        
+        # Add save button
+        save_button = toga.Button("Save Config", on_press=save_config, style=Pack(margin=5))
+        settings_box.add(save_button)
+
+        # Set the content of the create_config_window to the main box
+        create_config_window.content = settings_box
+
+    confirm_button = toga.Button("Confirm Selection", on_press=confirm_selection, style=Pack(margin=5))
+
+    # Add the button to the main box
+    main_box.add(confirm_button)
+
+    # Add the Box to the new window
+    create_config_window.content = main_box
+
+    # Show the new window
+    create_config_window.show()
+
 # End of GUI setup
 
 async def is_window_being_dragged():
@@ -944,6 +1073,15 @@ async def is_window_being_dragged():
             is_dragging = True
             return True
     is_dragging = False
+    return False
+
+def is_running_as_admin():
+    if sys.platform == "win32":
+        import ctypes
+        try:
+            return ctypes.windll.shell32.IsUserAnAdmin()
+        except Exception:
+            return False
     return False
 
 def main():

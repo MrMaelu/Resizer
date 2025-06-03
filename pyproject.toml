@@ -5,11 +5,7 @@ description = "Will let you control size, position, always-on-top and can remove
 readme = "README.md"
 requires-python = ">=3.12"
 dependencies = [
-    "pyautogui>=0.9.54",
     "pygetwindow>=0.0.9",
-    "pynput>=1.8.0",
-    "pywin32>=309",
-    "setuptools-scm>=8.2.1",
-    "toga>=0.4.9",
-    "travertino>=0.3.0",
+    "pywin32>=310",
+    "toga>=0.5.1",
 ]

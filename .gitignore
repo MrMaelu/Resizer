@@ -63,3 +63,7 @@ desktop.ini
 config_*.ini
 !config_example*.ini
 test.py
+configs
+
+# Others
+
