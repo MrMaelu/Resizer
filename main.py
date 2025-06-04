@@ -569,7 +569,7 @@ def draw_screen_layout(canvas, context, w, h, config, existing_windows, missing_
     global screen_width, screen_height
     try:
         # Setup background and border
-        with context.Fill(color='#303030') as fill:
+        with context.Fill(color='#000000') as fill:
             fill.rect(0, 0, w, h)
         with context.Stroke(color='black', line_width=2) as stroke:
             stroke.rect(2, 2, w-2, h-2)
@@ -577,9 +577,9 @@ def draw_screen_layout(canvas, context, w, h, config, existing_windows, missing_
         # Draw Windows taskbar (48px high) at the bottom
         taskbar_height = 48
         scaled_taskbar_height = (taskbar_height / screen_height) * h
-        with context.Fill(color='#222222') as fill:
+        with context.Fill(color='#666666') as fill:
             fill.rect(0, h - scaled_taskbar_height, w, scaled_taskbar_height)
-        with context.Stroke(color='#222222', line_width=1) as stroke:
+        with context.Stroke(color='#111111', line_width=1) as stroke:
             stroke.rect(0, h - scaled_taskbar_height, w, scaled_taskbar_height)
         
         if not config or not config.sections():
@@ -664,9 +664,9 @@ def draw_screen_layout(canvas, context, w, h, config, existing_windows, missing_
 def draw_window_box(context, title, x, y, w, h, real_x, real_y, real_w, real_h, always_on_top, window_exists):
     try:
         # Draw box
-        with context.Fill(color="blue" if not always_on_top else 'green') as fill:
+        with context.Fill(color="#303030" if not always_on_top else "#508050") as fill:
             fill.rect(x, y, w, h)
-        with context.Stroke(color='darkblue' if not always_on_top else 'darkgreen') as stroke:
+        with context.Stroke(color='#050505' if not always_on_top else '#050505') as stroke:
             stroke.rect(x, y, w, h)
         
         # Text layout parameters
@@ -695,7 +695,7 @@ def draw_window_box(context, title, x, y, w, h, real_x, real_y, real_w, real_h, 
         
         # Add missing text if window is not found
         if not window_exists:
-            with context.Fill(color='red') as fill:
+            with context.Fill(color='#ff5555') as fill:
                 fill.write_text("\n\n\n\n\nMissing", text_x, text_y + (len(text_lines) * line_height), font=my_font)
         
     except Exception as e:
@@ -837,8 +837,8 @@ def create_gui(app):
         app.main_window.content = box
         app.main_window.size = (700, 400)
         app.main_window.position = (
-            screen_width - app.main_window.size[0],
-            screen_height / 2
+            (screen_width // 2) - (app.main_window.size[0] // 2),
+            (screen_height // 2) - (app.main_window.size[1] // 2)
         )
 
         # Set initial value and trigger selection
@@ -980,20 +980,36 @@ def create_config(widget):
         def save_config(widget):
             # Get the values from the input fields and switches for each selected window
             config_data = {}
-            for i, window_title in enumerate(selected_windows_for_config):
-                window_box = window_settings[window_title]
-                title_input = window_box.children[0]
-                size_input = window_box.children[2]
-                position_input = window_box.children[4]
-                aot_switch = window_box.children[5]
-                titlebar_switch = window_box.children[6]
+            for window_title in selected_windows_for_config:
+                try:
+                    window_box = window_settings[window_title]
+                    window_children = window_box.children
+                    
+                    # Get title from first child (TextInput)
+                    title_input = next(child for child in window_children if isinstance(child, toga.TextInput))
+                    
+                    # Get the window box containing size, position and switches
+                    settings_box = next(child for child in window_children if isinstance(child, toga.Box))
+                    settings_children = settings_box.children
+                    
+                    # Find inputs and switches by type and order
+                    size_input = next(child for child in settings_children if isinstance(child, toga.TextInput))
+                    position_input = next((child for child in settings_children if isinstance(child, toga.TextInput) 
+                                         and child != size_input), None)
+                    aot_switch = next((child for child in settings_children if isinstance(child, toga.Switch) 
+                                     and "Always on Top" in child.text), None)
+                    titlebar_switch = next((child for child in settings_children if isinstance(child, toga.Switch) 
+                                      and "Titlebar" in child.text), None)
 
-                config_data[title_input.value] = {
-                    "size": size_input.value,
-                    "position": position_input.value,
-                    "always_on_top": aot_switch.value,
-                    "titlebar": titlebar_switch.value,
-                }
+                    config_data[title_input.value] = {
+                        "size": size_input.value if size_input else "",
+                        "position": position_input.value if position_input else "",
+                        "always_on_top": str(aot_switch.value) if aot_switch else "False",
+                        "titlebar": str(titlebar_switch.value) if titlebar_switch else "True",
+                    }
+                except Exception as e:
+                    print(f"Error processing window {window_title}: {e}")
+                    continue
 
             # Create a new ConfigParser object
             config = configparser.ConfigParser()
@@ -1006,32 +1022,37 @@ def create_config(widget):
                 config.set(window_title, "always_on_top", str(settings["always_on_top"]))
                 config.set(window_title, "titlebar", str(settings["titlebar"]))
 
-            filepath = filename_input.value
-            if not filepath:
-                async def show_dialog():
-                    dlg = toga.ErrorDialog("Error", "Config name cannot be empty.")
-                    await dlg._show(create_config_window)
-                asyncio.ensure_future(show_dialog())
-                return
-            if not filepath.startswith("config_"):
-                filepath = "config_" + filepath
-            if not filepath.endswith(".ini"):
-                filepath += ".ini"
-
-            # Save the configuration to the new file
+            # Get filename from input
             try:
+                filepath = filename_input.value
+                if not filepath:
+                    async def show_dialog():
+                        dlg = toga.ErrorDialog("Error", "Config name cannot be empty.")
+                        await dlg._show(create_config_window)
+                    asyncio.ensure_future(show_dialog())
+                    return
+                if not filepath.startswith("config_"):
+                    filepath = "config_" + filepath
+                if not filepath.endswith(".ini"):
+                    filepath += ".ini"
+
+                # Save the configuration to the new file
                 with open(os.path.join(config_dir, filepath), "w") as configfile:
                     config.write(configfile)
                 print(f"Configuration saved to {filepath}")
+                
+                # Refresh the config dropdown
+                global config_files, config_names
+                config_files, config_names = list_config_files()
+                config_dropdown.items = config_names
+
+                create_config_window.close()
             except Exception as e:
                 print(f"Error saving configuration: {e}")
-            
-            # Refresh the config dropdown
-            global config_files, config_names
-            config_files, config_names = list_config_files()
-            config_dropdown.items = config_names
-
-            create_config_window.close()
+                async def show_error():
+                    dlg = toga.ErrorDialog("Error", f"Failed to save configuration: {str(e)}")
+                    await dlg._show(create_config_window)
+                asyncio.ensure_future(show_error())
 
         # Add filename input
         filename_label = toga.Label("Enter config name:", style=Pack(margin=5))
