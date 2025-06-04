@@ -19,9 +19,6 @@ pip-delete-this-directory.txt
 env/
 venv/
 
-# PyInstaller
-*.spec
-
 # Unit test / coverage
 htmlcov/
 .tox/
