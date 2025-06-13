@@ -61,6 +61,7 @@ config_*.ini
 !config_example*.ini
 test.py
 configs
+settings.json
 
 # Others
 
