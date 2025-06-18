@@ -185,7 +185,7 @@ class ConfigManager:
             valid_items = {}
             for key, value in config.items(section):
                 if key == "position":
-                    valid_items[key] = value if re.match(r"^\d+,\d+$", value) else "0,0"
+                    valid_items[key] = value if re.match(r"^-?\d+,-?\d+$", value) else "0,0"
                 elif key == "size":
                     valid_items[key] = value if re.match(r"^\d+,\d+$", value) else "100,100"
                 elif key in ("always_on_top", "titlebar"):
