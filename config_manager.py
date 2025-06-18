@@ -5,14 +5,10 @@ import traceback
 import win32gui
 import win32con
 import pygetwindow as gw
-import toga
-from toga.style.pack import Pack, COLUMN, ROW
-from constants import UIConstants
 from utils import clean_window_title
 
 class ConfigManager:
     def __init__(self, base_path, window_manager=None):
-        print(f"Initializing ConfigManager with base_path: {base_path}")
         self.base_path = base_path
         self.config_dir = os.path.join(base_path, "configs")
         self.settings_file = os.path.join(base_path, "settings.json")
@@ -23,8 +19,6 @@ class ConfigManager:
             os.makedirs(self.config_dir)
             print(f"Created config directory: {self.config_dir}")
     
-        print("ConfigManager initialized")
-
     def list_config_files(self):
         # List all configuration files and their names
         config_files = [f for f in os.listdir(self.config_dir) 
@@ -92,16 +86,19 @@ class ConfigManager:
         return config_names[0] if config_names else None
 
     def save_window_config(self, config_name, window_data):
-        # Save window configuration to file
         try:
             if not config_name:
+                print("No config name provided")
                 return False
 
+            print(f"Saving config '{config_name}' with {len(window_data)} windows")
+
             config = configparser.ConfigParser()
-            
+
             for title, settings in window_data.items():
                 section_name = settings.get('name', clean_window_title(title, sanitize=True))
-                
+                print(f"Adding section: {section_name}")
+
                 config[section_name] = {
                     'position': str(settings.get('position', '0,0')),
                     'size': str(settings.get('size', '100,100')),
@@ -109,107 +106,25 @@ class ConfigManager:
                     'titlebar': str(settings.get('titlebar', True)).lower()
                 }
 
+            print(f"Config directory: {self.config_dir}")
+            if not os.path.isdir(self.config_dir):
+                print("Config directory does not exist.")
+                return False
+
             config_path = os.path.join(self.config_dir, f"config_{config_name}.ini")
+            print(f"Writing to file: {config_path}")
+
             with open(config_path, 'w', encoding='utf-8') as configfile:
                 config.write(configfile)
 
+            print("Config saved successfully")
             return True
 
         except Exception as e:
             print(f"Error saving window config: {e}")
+            import traceback
             traceback.print_exc()
             return False
-
-    def create_window_settings_box(self, title, settings):
-        # Create a box with settings controls for a window
-        window_box = toga.Box(style=Pack(direction=COLUMN, margin=5))
-        
-        # Store initial values for reset
-        initial_values = {
-            'name': settings.get('name', clean_window_title(title, sanitize=True)),
-            'position': settings.get('position', '0,0'),
-            'size': settings.get('size', '100,100'),
-            'always_on_top': settings.get('always_on_top', 'false') == 'true',
-            'titlebar': settings.get('titlebar', 'true') == 'true'
-        }
-        
-        # Add title with editable name
-        title_box = toga.Box(style=Pack(direction=ROW, margin=0))
-        title_box.add(toga.Label('Name:', style=Pack(margin=(5,0,5,0), width=UIConstants.LABEL_WIDTH)))
-        name_input = toga.TextInput(
-            value=settings.get('name', clean_window_title(title, sanitize=True)),
-            style=Pack(margin=2, width=130)
-        )
-        title_box.add(name_input)
-        window_box.add(title_box)
-        
-        # Create position input
-        pos_box = toga.Box(style=Pack(direction=ROW, margin=0))
-        pos_box.add(toga.Label('Position:', style=Pack(margin=(5,0,5,0), width=UIConstants.LABEL_WIDTH)))
-        position_input = toga.TextInput(
-            value=settings.get('position', '0,0'),
-            style=Pack(margin=2, width=60)
-        )
-        pos_box.add(position_input)
-        window_box.add(pos_box)
-        
-        # Create size input
-        size_box = toga.Box(style=Pack(direction=ROW, margin=0))
-        size_box.add(toga.Label('Size:', style=Pack(margin=(5,0,5,0), width=UIConstants.LABEL_WIDTH)))
-        size_input = toga.TextInput(
-            value=settings.get('size', '100,100'),
-            style=Pack(margin=2, width=60)
-        )
-        size_box.add(size_input)
-        window_box.add(size_box)
-        
-        # Create always-on-top switch with label as text
-        aot_box = toga.Box(style=Pack(direction=ROW, margin=0))
-        always_on_top_switch = toga.Switch(
-            'Always on Top',  # Add text parameter
-            value=initial_values['always_on_top'],
-            style=Pack(margin=5)
-        )
-        aot_box.add(always_on_top_switch)
-        window_box.add(aot_box)
-        
-        # Create titlebar switch with label as text
-        titlebar_box = toga.Box(style=Pack(direction=ROW, margin=0))
-        titlebar_switch = toga.Switch(
-            'Show Titlebar',  # Add text parameter
-            value=initial_values['titlebar'],
-            style=Pack(margin=5)
-        )
-        titlebar_box.add(titlebar_switch)
-        window_box.add(titlebar_box)
-        
-        # Add reset button
-        def reset_values(widget):
-            name_input.value = initial_values['name']
-            position_input.value = initial_values['position']
-            size_input.value = initial_values['size']
-            always_on_top_switch.value = initial_values['always_on_top']
-            titlebar_switch.value = initial_values['titlebar']
-        
-        button_box = toga.Box(style=Pack(direction=ROW, margin=0))
-        reset_button = toga.Button(
-            'Reset',
-            on_press=reset_values,
-            style=Pack(margin=0, width=UIConstants.BUTTON_WIDTH)
-        )
-        button_box.add(reset_button)
-        window_box.add(button_box)
-        
-        # Store references and initial values
-        window_box.name_input = name_input
-        window_box.position_input = position_input
-        window_box.size_input = size_input
-        window_box.always_on_top_switch = always_on_top_switch
-        window_box.titlebar_switch = titlebar_switch
-        window_box.original_title = title
-        window_box.initial_values = initial_values
-        
-        return window_box
 
     def collect_window_settings(self, window_title):
         # Get settings for a window
@@ -231,3 +146,13 @@ class ConfigManager:
         except Exception as e:
             print(f"Error collecting window settings: {e}")
             return None
+
+    def delete_config(self, name):
+        try:
+            path = os.path.join(self.config_dir, f"config_{name}.ini")
+            if os.path.exists(path):
+                os.remove(path)
+                return True
+        except Exception as e:
+            print(f"Failed to delete config '{name}': {e}")
+        return False

@@ -5,8 +5,10 @@ description = "Will let you control size, position, always-on-top and can remove
 readme = "README.md"
 requires-python = ">=3.12"
 dependencies = [
+    "messagebox>=0.1.0",
     "pygetwindow>=0.0.9",
     "pyinstaller>=6.14.0",
     "pywin32>=310",
-    "toga>=0.5.1",
+    "pywinstyles>=1.8",
+    "ttkthemes>=3.2.2",
 ]
