@@ -1,3 +1,4 @@
+import re
 import os
 import configparser
 import json
@@ -91,24 +92,40 @@ class ConfigManager:
                 print("No config name provided")
                 return False
 
+            config_name = clean_window_title(config_name, sanitize=True)
             print(f"Saving config '{config_name}' with {len(window_data)} windows")
 
             config = configparser.ConfigParser()
+            config.optionxform = str
 
+            # Prepare and sort entries by x-position
+            entries = []
             for title, settings in window_data.items():
-                section_name = settings.get('name', clean_window_title(title, sanitize=True))
-                print(f"Adding section: {section_name}")
+                if title and title.strip():
+                    section_name = settings.get('name') or title
+                    section_name = clean_window_title(section_name, sanitize=True)
+                    position = str(settings.get('position') or '0,0')
+                    try:
+                        x = int(position.split(',')[0])
+                    except Exception:
+                        x = 0
+                    entries.append((x, section_name, settings))
 
+            entries.sort(key=lambda x: x[0])  # Left to right by x-position
+
+            # Add sorted entries to config
+            for _, section_name, settings in entries:
                 config[section_name] = {
-                    'position': str(settings.get('position', '0,0')),
-                    'size': str(settings.get('size', '100,100')),
-                    'always_on_top': str(settings.get('always_on_top', False)).lower(),
-                    'titlebar': str(settings.get('titlebar', True)).lower()
+                    'position': str(settings.get('position') or '0,0'),
+                    'size': str(settings.get('size') or '100,100'),
+                    'always_on_top': str(settings.get('always_on_top') or False).lower(),
+                    'titlebar': str(settings.get('titlebar') or True).lower()
                 }
 
-            print(f"Config directory: {self.config_dir}")
+            config = self.validate_and_repair_config(config)
+            
             if not os.path.isdir(self.config_dir):
-                print("Config directory does not exist.")
+                print(f"Config directory {self.config_dir} does not exist.")
                 return False
 
             config_path = os.path.join(self.config_dir, f"config_{config_name}.ini")
@@ -156,3 +173,29 @@ class ConfigManager:
         except Exception as e:
             print(f"Failed to delete config '{name}': {e}")
         return False
+
+    def validate_and_repair_config(self, config):
+        repaired_config = configparser.ConfigParser()
+        repaired_config.optionxform = str
+
+        for section in config.sections():
+            if not section.strip() or section.upper() == "DEFAULT":
+                continue
+        
+            valid_items = {}
+            for key, value in config.items(section):
+                if key == "position":
+                    valid_items[key] = value if re.match(r"^\d+,\d+$", value) else "0,0"
+                elif key == "size":
+                    valid_items[key] = value if re.match(r"^\d+,\d+$", value) else "100,100"
+                elif key in ("always_on_top", "titlebar"):
+                    valid_items[key] = value.lower() if value.lower() in ("true", "false") else "false"
+                elif value is not None and value.strip():
+                    valid_items[key] = value.strip()
+            
+            if valid_items:
+                repaired_config.add_section(section)
+                for key, val in valid_items.items():
+                    repaired_config.set(section, key, val)
+            
+        return repaired_config

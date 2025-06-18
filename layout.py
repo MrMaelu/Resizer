@@ -1,3 +1,4 @@
+import re
 import tkinter as tk
 from tkinter import ttk, messagebox
 import pywinstyles
@@ -409,6 +410,7 @@ class TkGUIManager:
                         'name': name_var.get().strip()
                     }
                 name = config_name_var.get().strip()
+                name = re.sub(r'[<>:"/\\|?*]', '', name)
                 if not name:
                     messagebox.showerror("Error", "Config name is required")
                     return

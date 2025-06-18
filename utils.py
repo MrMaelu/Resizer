@@ -26,6 +26,7 @@ def clean_window_title(title, sanitize=False):
         title = parts[-1].strip()
         title = re.sub(r'\s*\(.*\)$', '', title)
         title = re.sub(r'\s+\d+%$', '', title)
+        title = re.sub(r'[<>:"/\\|?*\[\]]', '', title)
     
     return title.title()
 

@@ -157,7 +157,8 @@ class ApplicationState:
         if selected_value in state.config_names:
             idx = state.config_names.index(selected_value)
             selected_config = state.config_files[idx]
-            state.config = state.config_manager.load_config(selected_config)
+            loaded_config = state.config_manager.load_config(selected_config)
+            state.config = self.config_manager.validate_and_repair_config(loaded_config)
             existing_windows, missing_windows = state.window_manager.find_matching_windows(state.config)
             if not state.app.compact_mode:
                 state.compute_window_layout(state.config, missing_windows)
