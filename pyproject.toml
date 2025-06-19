@@ -10,5 +10,4 @@ dependencies = [
     "pyinstaller>=6.14.0",
     "pywin32>=310",
     "pywinstyles>=1.8",
-    "ttkthemes>=3.2.2",
 ]

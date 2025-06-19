@@ -75,11 +75,9 @@ class Fonts:
 
 class Themes:
     APPROVED_DARK_THEMES = (
-        'equilux',
         'clam',
     )
     
     APPROVED_LIGHT_THEMES = (
-        'yaru',
-        'adapta',
+        'default',
     )

@@ -2,9 +2,8 @@ import re
 import tkinter as tk
 from tkinter import ttk, messagebox
 import pywinstyles
-import ctypes
+from ctypes import windll
 from typing import List
-from ttkthemes import ThemedStyle
 
 # Local imports
 from utils import WindowInfo, clean_window_title, choose_color
@@ -13,8 +12,8 @@ from custom_widgets import CustomDropdown
 
 class TkGUIManager:
     def __init__(self, root, callbacks=None):
-        self.style = ThemedStyle()
-        self.available_themes = set(self.style.theme_names())
+        self.style = ttk.Style()
+        self.available_themes = self.style.theme_names()
         self.theme_list = [
             theme for theme in self.available_themes
             if theme in Themes.APPROVED_DARK_THEMES
@@ -105,13 +104,13 @@ class TkGUIManager:
 
     def apply_titlebar_style(self):
         try:
-            window = ctypes.windll.user32.GetActiveWindow()
+            window = windll.user32.GetActiveWindow()
             pywinstyles.apply_style(window, 'dark' if self.theme in Themes.APPROVED_DARK_THEMES else 'normal')
             pywinstyles.change_header_color(window, color=choose_color(WindowStyles.TITLE_BAR_COLOR, Themes.APPROVED_DARK_THEMES, self.theme))
             pywinstyles.change_title_color(window, color=choose_color(WindowStyles.TITLE_TEXT_COLOR, Themes.APPROVED_DARK_THEMES, self.theme))
         except Exception as e:
             print(f"Error applying dark mode to titlebar: {e}")
-
+    
     def create_layout(self):
         # Main frame
         self.main_frame = ttk.Frame(self.root, padding=UIConstants.MARGIN)
@@ -257,7 +256,7 @@ class TkGUIManager:
             self.theme = self.theme_list[idx]
 
             # Redrawing GUI
-            #self.layout_frame.redraw(self.theme)
+            self.layout_frame.redraw(self.theme)
             self.setup_styles()
             self.combo_box.set_theme(self.theme)
             self.root.after(100, self.apply_titlebar_style)
@@ -474,7 +473,6 @@ class ScreenLayoutFrame(ttk.Frame):
     def __init__(self, parent, screen_width, screen_height, windows: List[WindowInfo], theme):
         super().__init__(parent)
         self.windows = windows
-        theme = 'clam'
         self.update_colors(theme)
 
         self.canvas = tk.Canvas(self, bg=choose_color(Colors.BACKGROUND, Themes.APPROVED_DARK_THEMES, theme), highlightthickness=0)

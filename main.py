@@ -1,6 +1,6 @@
 import os
 import sys
-import ctypes
+from ctypes import windll
 import tkinter as tk
 import tkinter.messagebox as messagebox
 
@@ -115,7 +115,7 @@ class ApplicationState:
             params = " ".join([f'"{arg}"' for arg in sys.argv])
             print(f"Restarting with admin privileges: {params}")
             # ShellExecuteW returns >32 if successful
-            rc = ctypes.windll.shell32.ShellExecuteW(
+            rc = windll.shell32.ShellExecuteW(
                 None, "runas", sys.executable, params, None, 1
             )
             if rc > 32:
@@ -237,7 +237,7 @@ def load_tk_GUI():
 
     # Set default config
     state.update_config_list()
-
+    
     state.app.root.mainloop()
 
 
@@ -264,7 +264,7 @@ if __name__ == "__main__":
 
     # Check for admin rights
     try:
-        state.is_admin = ctypes.windll.shell32.IsUserAnAdmin()
+        state.is_admin = windll.shell32.IsUserAnAdmin()
     except:
         state.is_admin = False
 
