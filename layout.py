@@ -39,6 +39,7 @@ class TkGUIManager:
         self.callbacks = callbacks or {}
 
         self.apply_config = None
+        self.reset_config = None
         self.create_config = None
         self.delete_config = None
         self.open_config_folder = None
@@ -154,24 +155,37 @@ class TkGUIManager:
         main_buttons.pack(side=tk.TOP, fill=tk.X)
 
         # Add buttons with centered layout and adjusted width for symmetrical spacing
-        buttons = [
+        buttons_1 = [
             ("Apply config", self.callbacks.get("apply_config") or self.apply_config),
+            ("Reset config", self.callbacks.get("reset_config") or self.reset_config),
             ("Create Config", self.callbacks.get("create_config") or self.create_config),
             ("Delete Config", self.callbacks.get("delete_config") or self.delete_config),
+        ]
+        
+        buttons_2 = [
             ("Config Folder", self.callbacks.get("open_config_folder") or self.open_config_folder),
             ("Restart as Admin", self.callbacks.get("restart_as_admin") or self.restart_as_admin),
             ("Toggle Compact", self.callbacks.get("toggle_compact") or self.toggle_compact),
             ("Theme", self.callbacks.get("theme") or self.change_gui_theme)
         ]
 
-        self.buttons_container = ttk.Frame(main_buttons)
-        self.buttons_container.pack(side=tk.TOP, fill=tk.X, expand=True, anchor=tk.CENTER)
+        self.buttons_1_container = ttk.Frame(main_buttons)
+        self.buttons_1_container.pack(side=tk.TOP, fill=tk.X, expand=True, anchor=tk.CENTER)
         
-        total_buttons_width = len(buttons) * 100
-        self.buttons_container.configure(width=total_buttons_width)
-        for name, command in buttons:
-            btn = ttk.Button(self.buttons_container, text=name, command=command)
-            btn.pack(side=tk.LEFT, padx=UIConstants.MARGIN[1], pady=UIConstants.MARGIN[2], fill=tk.X, expand=True)
+        total_buttons_1_width = len(buttons_1) * 100
+        self.buttons_1_container.configure(width=total_buttons_1_width)
+        for name, command in buttons_1:
+            btn = ttk.Button(self.buttons_1_container, text=name, command=command, width=20)
+            btn.pack(side=tk.LEFT, padx=UIConstants.MARGIN[2], pady=UIConstants.MARGIN[0], fill=tk.X, expand=True)
+
+        self.buttons_2_container = ttk.Frame(main_buttons)
+        self.buttons_2_container.pack(side=tk.TOP, fill=tk.X, expand=True, anchor=tk.CENTER)
+        
+        total_buttons_2_width = len(buttons_2) * 100
+        self.buttons_2_container.configure(width=total_buttons_2_width)
+        for name, command in buttons_2:
+            btn = ttk.Button(self.buttons_2_container, text=name, command=command, width=20)
+            btn.pack(side=tk.LEFT, padx=UIConstants.MARGIN[2], pady=UIConstants.MARGIN[0], fill=tk.X, expand=True)
 
         # AOT container
         aot_container = ttk.Frame(self.button_frame, padding=UIConstants.MARGIN)
@@ -280,7 +294,10 @@ class TkGUIManager:
             if self.layout_container:
                 self.layout_container.pack_forget()
 
-            for child in self.buttons_container.winfo_children():
+            for child in self.buttons_1_container.winfo_children():
+                child.pack_configure(side=tk.TOP, fill=tk.X)
+            
+            for child in self.buttons_2_container.winfo_children():
                 child.pack_configure(side=tk.TOP, fill=tk.X)
 
             self.setup_managed_text()
@@ -289,7 +306,11 @@ class TkGUIManager:
             if self.layout_container:
                 self.layout_container.pack(before=self.button_frame, side=tk.TOP, fill=tk.BOTH, expand=True)
 
-            for child in self.buttons_container.winfo_children():
+            for child in self.buttons_1_container.winfo_children():
+                if isinstance(child, ttk.Button):
+                    child.pack_configure(side=tk.LEFT, fill=tk.X)
+            
+            for child in self.buttons_2_container.winfo_children():
                 if isinstance(child, ttk.Button):
                     child.pack_configure(side=tk.LEFT, fill=tk.X)
 

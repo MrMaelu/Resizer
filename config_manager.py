@@ -118,11 +118,11 @@ class ConfigManager:
                 config[section_name] = {
                     'position': str(settings.get('position') or '0,0'),
                     'size': str(settings.get('size') or '100,100'),
-                    'always_on_top': str(settings.get('always_on_top') or False).lower(),
-                    'titlebar': str(settings.get('titlebar') or True).lower()
+                    'always_on_top': str(settings.get('always_on_top')).lower() if 'always_on_top' in settings else 'false',
+                    'titlebar': str(settings.get('titlebar')).lower() if 'titlebar' in settings else 'true',
                 }
 
-            config = self.validate_and_repair_config(config)
+            validated_config = self.validate_and_repair_config(config)
             
             if not os.path.isdir(self.config_dir):
                 print(f"Config directory {self.config_dir} does not exist.")
@@ -132,7 +132,7 @@ class ConfigManager:
             print(f"Writing to file: {config_path}")
 
             with open(config_path, 'w', encoding='utf-8') as configfile:
-                config.write(configfile)
+                validated_config.write(configfile)
 
             print("Config saved successfully")
             return True
@@ -188,8 +188,10 @@ class ConfigManager:
                     valid_items[key] = value if re.match(r"^-?\d+,-?\d+$", value) else "0,0"
                 elif key == "size":
                     valid_items[key] = value if re.match(r"^\d+,\d+$", value) else "100,100"
-                elif key in ("always_on_top", "titlebar"):
+                elif key == "always_on_top":
                     valid_items[key] = value.lower() if value.lower() in ("true", "false") else "false"
+                elif key == "titlebar":
+                    valid_items[key] = value.lower() if value.lower() in ("true", "false") else "true"
                 elif value is not None and value.strip():
                     valid_items[key] = value.strip()
             

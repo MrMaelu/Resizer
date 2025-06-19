@@ -2,16 +2,11 @@
 
 ## Manage window layouts and apply manual overrides
 
-### This script provides a GUI to:
-1. Load and apply window layout configurations (position, size, always-on-top, title bar)
-   from '.ini' files.
-2. Manually select any window to make it always-on-top and remove its title bar.
+### This script provides a GUI to load and apply window layout configurations (position, size, always-on-top, title bar) from '.ini' files.
 
 ### Features:
 - Load and apply window configurations from 'config_*.ini' files.
 - Visual preview of the selected configuration's layout.
-- Manually select any window via button click to make it Always-on-Top and remove its title bar.
-- Reset all applied settings (config or manual) using the 'Cancel/reset settings' button.
 - Toggle Always-on-Top state specifically for windows managed by the *currently applied config*.
 - Support for multiple configuration files.
 - Config creation through GUI
@@ -36,12 +31,6 @@
 #### Delete settings
 1. Click the "Open Config Folder" button
 2. Delete the config file
-
-#### Single window use
-- Click 'Select Window', then click on any target window on your screen.
-   - This makes the selected window Always-on-Top and removes its title bar.
-   - Entering selection mode stops any active configuration and periodic checks, and resets previously managed windows.
-   - Applying a config or selecting a *new* window resets the previously *manually* selected one.
 
 ### Configuration Format (***'config_\<name\>.ini'***):
 ```

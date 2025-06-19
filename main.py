@@ -92,6 +92,10 @@ class ApplicationState:
             
             self.update_always_on_top_status()
 
+    def reset_settings(self):
+        # Reset any existing windows first
+        self.window_manager.reset_all_windows()
+    
     def toggle_always_on_top(self):
         for hwnd in self.window_manager.topmost_windows:
             self.window_manager.toggle_always_on_top(hwnd)
@@ -211,6 +215,7 @@ def load_tk_GUI():
     root = tk.Tk()
     callbacks = {
         "apply_config": state.apply_settings,
+        "reset_config": state.reset_settings,
         "create_config": state.create_config,
         "open_config_folder": state.open_config_folder,
         "restart_as_admin": state.restart_as_admin,

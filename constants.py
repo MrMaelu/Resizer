@@ -1,7 +1,7 @@
 class UIConstants:
     # Window dimensions
     WINDOW_WIDTH = 900
-    WINDOW_HEIGHT = 420
+    WINDOW_HEIGHT = 475
     COMPACT_WIDTH = 180
     COMPACT_HEIGHT = 400
     BUTTON_WIDTH = 100
@@ -12,7 +12,7 @@ class UIConstants:
     WINDOW_TITLE_MAX_LENGTH = 24
     
     # UI element sizes
-    MARGIN = (1,1,1,1)  # (top, right, bottom, left)
+    MARGIN = (2,2,2,2)  # (top, right, bottom, left)
     PADDING = 0
     LINE_HEIGHT = 20
     FONT_SIZE = 8
