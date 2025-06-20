@@ -72,6 +72,8 @@ class WindowManager:
         # Reset all managed windows to their original state
         windows_to_reset = self.managed_windows.copy()  # Create a copy to avoid modification during iteration
         for hwnd in windows_to_reset:
+            self.set_always_on_top(hwnd, enable=False)
+            self.restore_window_frame(hwnd)
             self.remove_managed_window(hwnd)
 
     def get_window_info(self, window_title):
@@ -237,8 +239,20 @@ class WindowManager:
             if window.isMinimized:
                 self.restore_window(hwnd)
 
-            # Handle dictionary config directly
+            # Apply settings
+            # Check if the config is a dictionary and attempt to apply
             if isinstance(config, dict):
+                # Remove titlebar if set
+                if 'has_titlebar' in config:
+                    if not config['has_titlebar']:
+                        self.make_borderless(hwnd)
+                    else:
+                        self.restore_window_frame(hwnd)
+
+                # Apply window state settings
+                if 'always_on_top' in config:
+                    self.set_always_on_top(hwnd, config['always_on_top'])
+                
                 # Apply position if specified
                 if 'position' in config and config['position']:
                     try:
@@ -255,16 +269,6 @@ class WindowManager:
                     except Exception as e:
                         print(f"Error setting size: {e}")
 
-                # Apply window state settings
-                if 'always_on_top' in config:
-                    self.set_always_on_top(hwnd, config['always_on_top'])
-
-                if 'has_titlebar' in config:
-                    if not config['has_titlebar']:
-                        self.make_borderless(hwnd)
-                    else:
-                        self.restore_window_frame(hwnd)
-                        
             # Handle ConfigParser config
             elif hasattr(config, 'sections'):
                 window_title = self.get_window_title(hwnd)
@@ -275,15 +279,16 @@ class WindowManager:
                         always_on_top = config.getboolean(section, 'always_on_top', fallback=False)
                         has_titlebar = config.getboolean(section, 'has_titlebar', fallback=True)
                         
+                        self.set_always_on_top(hwnd, always_on_top)
+                        if not has_titlebar:
+                            self.make_borderless(hwnd)                        
                         if position:
                             pos = eval(position)
                             self.set_window_position(hwnd, pos[0], pos[1])
                         if size:
                             dimensions = eval(size)
                             self.set_window_size(hwnd, dimensions[0], dimensions[1])
-                        self.set_always_on_top(hwnd, always_on_top)
-                        if not has_titlebar:
-                            self.make_borderless(hwnd)
+
                         break
 
             return True

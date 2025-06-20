@@ -147,10 +147,15 @@ class ApplicationState:
             else:
                 messagebox.showerror("Error", f"Failed to delete '{current_name}'.")
 
-    def on_mode_toggle(self):
-        state.app.toggle_compact()
+    def on_mode_toggle(self=None, startup=False):
+        state.app.toggle_compact(startup)
+        state.compact = state.app.compact_mode
+        state.config_manager.save_settings(state.compact)
         if state.app.compact_mode:
             state.update_managed_windows_list(state.config)
+        else:
+            existing_windows, missing_windows = state.window_manager.find_matching_windows(state.config)
+            state.compute_window_layout(state.config, missing_windows)
 
     def theme(self):
         state.app.change_gui_theme()
@@ -225,8 +230,10 @@ def load_tk_GUI():
         "delete_config": state.delete_config,
         "theme": state.theme,
     }
-    app = TkGUIManager(root, callbacks)
+    app = TkGUIManager(root, callbacks=callbacks, compact=state.compact, is_admin=state.is_admin)
     state.app = app
+    
+    state.app.compact_mode = state.compact
     
     # Get screen resolution
     state.screen_width = app.root.winfo_screenwidth()
@@ -241,10 +248,15 @@ def load_tk_GUI():
     app.resolution_label["text"] = f"{state.screen_width} x {state.screen_height}"
 
     # Set default config
-    state.update_config_list()
+
+    if state.compact: state.on_mode_toggle(startup=True)
+    
+    default_config = state.config_manager.detect_default_config(state.window_manager)
+    
+    state.update_config_list(default_config)
     
     state.app.root.mainloop()
-
+    
 
 if __name__ == "__main__":
     # Get application base path
@@ -274,3 +286,4 @@ if __name__ == "__main__":
         state.is_admin = False
 
     load_tk_GUI()
+

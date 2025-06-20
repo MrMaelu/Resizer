@@ -11,7 +11,7 @@ from constants import UIConstants, Colors, Messages, WindowStyles, Fonts, Themes
 from custom_widgets import CustomDropdown
 
 class TkGUIManager:
-    def __init__(self, root, callbacks=None):
+    def __init__(self, root, callbacks=None, compact=False, is_admin=False):
         self.style = ttk.Style()
         self.available_themes = self.style.theme_names()
         self.theme_list = [
@@ -29,8 +29,10 @@ class TkGUIManager:
         self.root.title("Window Manager")
         self.root.configure(bg=choose_color(Colors.BACKGROUND, Themes.APPROVED_DARK_THEMES, self.theme))
 
+        self.compact_mode = compact or False
+        self.is_admin = is_admin
+
         self.default_font = Fonts.TEXT_NORMAL
-        self.compact_mode = False
         self.canvas = None
         self.buttons_container = None
         self.managed_label = None
@@ -65,6 +67,7 @@ class TkGUIManager:
         self.window_always_on_top = choose_color(Colors.WINDOW_ALWAYS_ON_TOP, Themes.APPROVED_DARK_THEMES, self.theme)
         self.text_error = choose_color(Colors.TEXT_ERROR, Themes.APPROVED_DARK_THEMES, self.theme)
         self.text_always_on_top = choose_color(Colors.TEXT_ALWAYS_ON_TOP, Themes.APPROVED_DARK_THEMES, self.theme)
+        self.text_dim = choose_color(Colors.TEXT_DIM, Themes.APPROVED_DARK_THEMES, self.theme)
 
         style.configure("TFrame", background=self.background)
         
@@ -72,6 +75,12 @@ class TkGUIManager:
             font=self.default_font,
             background=self.background,
             foreground=self.text_normal
+        )
+
+        style.configure("Admin.TLabel",
+            font=Fonts.TEXT_BOLD,
+            background=self.background,
+            foreground=Colors.ADMIN_ENABLED
         )
         
         style.configure("TButton",
@@ -82,6 +91,13 @@ class TkGUIManager:
             activeforeground=self.text_normal
         )
         style.map("TButton", background=[('active', self.window_normal)], foreground=[('active', self.text_normal)])
+
+        style.configure("Disabled.TButton",
+            font=Fonts.TEXT_NORMAL,
+            foreground=self.text_dim,
+            background=self.window_normal_dark,
+            borderwidth=0
+        )
         
         style.configure("TCombobox",
             font=self.default_font,
@@ -132,9 +148,18 @@ class TkGUIManager:
         # Screen resolution label
         self.resolution_label = ttk.Label(header_frame, text="Screen: 0 x 0", padding=(0, 0, 5, 0))
         self.resolution_label.configure(style='TLabel')
-        self.resolution_label.pack(side=tk.TOP, fill=tk.X)
+        self.resolution_label.pack(side=tk.LEFT, fill=tk.X)
+
+        # User / Admin mode label
+        app_mode = "Admin" if self.is_admin else "User"
+        self.admin_label = ttk.Label(header_frame, text=f"Mode: {app_mode}", padding=(0, 0, 5, 0))
+        self.admin_label.configure(style='Admin.TLabel' if self.is_admin else 'TLabel')
+        self.admin_label.pack(side=tk.RIGHT, fill=tk.X)
         
-        self.combo_box = CustomDropdown(header_frame, values=[], command=self.callbacks.get("config_selected", self.on_config_select))
+        combo_frame = header_frame = ttk.Frame(self.main_frame, padding=UIConstants.MARGIN)
+        combo_frame.configure(style="TFrame")
+        combo_frame.pack(side=tk.TOP, fill=tk.X)
+        self.combo_box = CustomDropdown(combo_frame, values=[], command=self.callbacks.get("config_selected", self.on_config_select))
         self.combo_box.pack(side=tk.LEFT, pady=UIConstants.MARGIN[2])
         self.combo_box.set_theme(self.theme)
 
@@ -158,15 +183,15 @@ class TkGUIManager:
         buttons_1 = [
             ("Apply config", self.callbacks.get("apply_config") or self.apply_config),
             ("Reset config", self.callbacks.get("reset_config") or self.reset_config),
-            ("Create Config", self.callbacks.get("create_config") or self.create_config),
+            ("Create config", self.callbacks.get("create_config") or self.create_config),
             ("Delete Config", self.callbacks.get("delete_config") or self.delete_config),
         ]
         
         buttons_2 = [
-            ("Config Folder", self.callbacks.get("open_config_folder") or self.open_config_folder),
+            ("Open config folder", self.callbacks.get("open_config_folder") or self.open_config_folder),
             ("Restart as Admin", self.callbacks.get("restart_as_admin") or self.restart_as_admin),
-            ("Toggle Compact", self.callbacks.get("toggle_compact") or self.toggle_compact),
-            ("Theme", self.callbacks.get("theme") or self.change_gui_theme)
+            ("Toggle compact", self.callbacks.get("toggle_compact") or self.toggle_compact),
+            ("Change theme", self.callbacks.get("theme") or self.change_gui_theme)
         ]
 
         self.buttons_1_container = ttk.Frame(main_buttons)
@@ -184,7 +209,14 @@ class TkGUIManager:
         total_buttons_2_width = len(buttons_2) * 100
         self.buttons_2_container.configure(width=total_buttons_2_width)
         for name, command in buttons_2:
-            btn = ttk.Button(self.buttons_2_container, text=name, command=command, width=20)
+            adm = (self.is_admin and name == "Restart as Admin")
+            btn = ttk.Button(self.buttons_2_container,
+                text=name,
+                command=command,
+                width=20,
+                state=tk.DISABLED if adm else tk.NORMAL,
+                style='Disabled.TButton' if adm else 'TButton',
+            )
             btn.pack(side=tk.LEFT, padx=UIConstants.MARGIN[2], pady=UIConstants.MARGIN[0], fill=tk.X, expand=True)
 
         # AOT container
@@ -288,8 +320,8 @@ class TkGUIManager:
         except Exception as e:
             print("Theme change failed:", e)
 
-    def toggle_compact(self):
-        self.compact_mode = not self.compact_mode
+    def toggle_compact(self, startup=False):
+        if not startup: self.compact_mode = not self.compact_mode
         if self.compact_mode:
             if self.layout_container:
                 self.layout_container.pack_forget()
@@ -301,7 +333,6 @@ class TkGUIManager:
                 child.pack_configure(side=tk.TOP, fill=tk.X)
 
             self.setup_managed_text()
-            self.scale_gui()
         else:
             if self.layout_container:
                 self.layout_container.pack(before=self.button_frame, side=tk.TOP, fill=tk.BOTH, expand=True)
@@ -322,7 +353,8 @@ class TkGUIManager:
                 self.managed_text = None
 
             self.managed_frame.pack_forget()
-            self.scale_gui()
+        
+        self.scale_gui()
 
     def create_config_ui(self, parent, window_titles, save_callback, settings_callback, refresh_callback):
         parent.attributes('-disabled', True)

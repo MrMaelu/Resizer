@@ -1,7 +1,7 @@
 class UIConstants:
     # Window dimensions
-    WINDOW_WIDTH = 900
-    WINDOW_HEIGHT = 475
+    WINDOW_WIDTH = 850
+    WINDOW_HEIGHT = 480
     COMPACT_WIDTH = 180
     COMPACT_HEIGHT = 400
     BUTTON_WIDTH = 100
@@ -34,11 +34,13 @@ class Colors:
     WINDOW_NORMAL = "#404040"
     WINDOW_ALWAYS_ON_TOP = "#508050"
     WINDOW_BORDER = "#050505"
+    DIM_BORDER = "#555555"
     
     # Text colors
     TEXT_NORMAL = "#FFFFFF"
     TEXT_ERROR = "#FFFF00"
     TEXT_ALWAYS_ON_TOP = "#50A050"
+    TEXT_DIM = "#555555"
 
     # Add these for darker backgrounds
     WINDOW_NORMAL_DARK = "#2A2A2A"
