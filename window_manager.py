@@ -250,10 +250,6 @@ class WindowManager:
                     else:
                         self.restore_window_frame(hwnd)
 
-                # Apply window state settings
-                if 'always_on_top' in config:
-                    self.set_always_on_top(hwnd, config['always_on_top'])
-                
                 # Apply position if specified
                 if 'position' in config and config['position']:
                     try:
@@ -269,6 +265,10 @@ class WindowManager:
                         self.set_window_size(hwnd, size[0], size[1])
                     except Exception as e:
                         print(f"Error setting size: {e}")
+
+                # Apply window state settings
+                if 'always_on_top' in config:
+                    self.set_always_on_top(hwnd, config['always_on_top'])
 
             # Handle ConfigParser config
             elif hasattr(config, 'sections'):
