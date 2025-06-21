@@ -58,6 +58,11 @@ class ApplicationState:
     def app(self, value):
         self._app = value
 
+
+######################
+# Callback functions #
+######################
+
     def apply_settings(self):
         selected_config = self.config_files[self.config_names.index(self.app.combo_box.var.get())]
 
@@ -95,18 +100,14 @@ class ApplicationState:
     def reset_settings(self):
         # Reset any existing windows first
         self.window_manager.reset_all_windows()
-    
-    def toggle_always_on_top(self):
-        for hwnd in self.window_manager.topmost_windows:
-            self.window_manager.toggle_always_on_top(hwnd)
-        self.update_always_on_top_status()
 
-    def update_always_on_top_status(self):
-        try:
-            status = self.window_manager.get_always_on_top_status()
-            self.app.aot_label['text'] = status
-        except Exception as e:
-            print(f"Error updating always-on-top status: {e}")
+    def create_config(self):
+        self.app.create_config_ui(self.app.root,
+            self.window_manager.get_all_window_titles(),
+            self.config_manager.save_window_config,
+            self.config_manager.collect_window_settings,
+            self.update_config_list
+        )
 
     def open_config_folder(self):
         # Open the config folder in File Explorer
@@ -125,58 +126,65 @@ class ApplicationState:
             if rc > 32:
                 os._exit(0)
 
-    def create_config(self):
-        state.app.create_config_ui(state.app.root,
-            state.window_manager.get_all_window_titles(),
-            state.config_manager.save_window_config,
-            state.config_manager.collect_window_settings,
-            state.update_config_list
-        )
+    def toggle_always_on_top(self):
+        for hwnd in self.window_manager.topmost_windows:
+            self.window_manager.toggle_always_on_top(hwnd)
+        self.update_always_on_top_status()
+    
+    def on_config_select(self, selected_value):
+        if selected_value in self.config_names:
+            idx = self.config_names.index(selected_value)
+            selected_config = self.config_files[idx]
+            loaded_config = self.config_manager.load_config(selected_config)
+            self.config = self.config_manager.validate_and_repair_config(loaded_config)
+            existing_windows, missing_windows = self.window_manager.find_matching_windows(self.config)
+            if not self.app.compact_mode:
+                self.compute_window_layout(self.config, missing_windows)
+            else:
+                self.update_managed_windows_list(self.config)
+
+    def on_mode_toggle(self=None, startup=False):
+        self.app.toggle_compact(startup)
+        self.compact = self.app.compact_mode
+        self.config_manager.save_settings(self.compact)
+        if self.app.compact_mode:
+            self.update_managed_windows_list(self.config)
+        else:
+            existing_windows, missing_windows = self.window_manager.find_matching_windows(self.config)
+            self.compute_window_layout(self.config, missing_windows)
 
     def delete_config(self):
-        current_name = state.app.combo_box.var.get().strip()
+        current_name = self.app.combo_box.var.get().strip()
         if not current_name:
             messagebox.showerror("Error", "No config selected to delete.")
             return
 
         confirm = messagebox.askyesno("Confirm Delete", f"Delete config '{current_name}'?")
         if confirm:
-            deleted = state.config_manager.delete_config(current_name)
+            deleted = self.config_manager.delete_config(current_name)
             if deleted:
-                state.update_config_list()
+                self.update_config_list()
             else:
                 messagebox.showerror("Error", f"Failed to delete '{current_name}'.")
 
-    def on_mode_toggle(self=None, startup=False):
-        state.app.toggle_compact(startup)
-        state.compact = state.app.compact_mode
-        state.config_manager.save_settings(state.compact)
-        if state.app.compact_mode:
-            state.update_managed_windows_list(state.config)
-        else:
-            existing_windows, missing_windows = state.window_manager.find_matching_windows(state.config)
-            state.compute_window_layout(state.config, missing_windows)
-
     def theme(self):
-        state.app.change_gui_theme()
-        if state.app.compact_mode:
-            state.update_managed_windows_list(state.config)
-    
-    def on_config_select(self, selected_value):
-        if selected_value in state.config_names:
-            idx = state.config_names.index(selected_value)
-            selected_config = state.config_files[idx]
-            loaded_config = state.config_manager.load_config(selected_config)
-            state.config = self.config_manager.validate_and_repair_config(loaded_config)
-            existing_windows, missing_windows = state.window_manager.find_matching_windows(state.config)
-            if not state.app.compact_mode:
-                state.compute_window_layout(state.config, missing_windows)
-            else:
-                state.update_managed_windows_list(state.config)
+        self.app.change_gui_theme()
+        if self.app.compact_mode:
+            self.update_managed_windows_list(self.config)
+
+######################
+
+
+    def update_always_on_top_status(self):
+        try:
+            status = self.window_manager.get_always_on_top_status()
+            self.app.aot_label['text'] = status
+        except Exception as e:
+            print(f"Error updating always-on-top status: {e}")
 
     def update_managed_windows_list(self, config):
-        if not hasattr(state.app, 'managed_text'):
-            state.app.setup_managed_text()  # Ensure widgets exist
+        if not hasattr(self.app, 'managed_text'):
+            self.app.setup_managed_text()  # Ensure widgets exist
 
         lines = []
         aot_lines = []
@@ -189,7 +197,7 @@ class ApplicationState:
                 lines.append(title)
                 aot_lines.append(is_aot)
 
-        state.app.update_managed_text(lines, aot_lines)
+        self.app.update_managed_text(lines, aot_lines)
 
     def compute_window_layout(self, config, missing_windows):
         positioned_windows = []
@@ -204,16 +212,21 @@ class ApplicationState:
                     size_w, size_h = map(int, size.split(','))
                     always_on_top = config[section].get("always_on_top", "false").lower() == "true"
                     window_exists = section not in missing_windows
-                    positioned_windows.append(WindowInfo(section, pos_x, pos_y, size_w, size_h, always_on_top, window_exists))
+                    positioned_windows.append(WindowInfo(section,
+                                                         pos_x, pos_y,
+                                                         size_w, size_h,
+                                                         always_on_top,
+                                                         window_exists
+                                                         ))
 
-            state.app.set_layout_frame(state.screen_width, state.screen_height, positioned_windows)
+            self.app.set_layout_frame(self.screen_width, self.screen_height, positioned_windows)
 
-    def update_config_list(self, config=None):
-        state.config_files, state.config_names = state.config_manager.list_config_files()
-        if state.config_files and state.config_names:
-            state.app.combo_box.values = state.config_names
-            state.app.combo_box.var.set(config or state.config_names[0])
-            state.on_config_select(config or state.config_names[0])
+    def update_config_list(self, config=None, retries=3):
+        self.config_files, self.config_names = self.config_manager.list_config_files()
+        if self.config_files and self.config_names:
+            self.app.combo_box.values = self.config_names
+            self.app.combo_box.var.set(config or self.config_names[0])
+            self.on_config_select(config or self.config_manager.detect_default_config())
 
 
 def load_tk_GUI():
@@ -251,7 +264,7 @@ def load_tk_GUI():
 
     if state.compact: state.on_mode_toggle(startup=True)
     
-    default_config = state.config_manager.detect_default_config(state.window_manager)
+    default_config = state.config_manager.detect_default_config()
     
     state.update_config_list(default_config)
     

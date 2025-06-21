@@ -49,6 +49,8 @@ class TkGUIManager:
         self.toggle_AOT = None
         self.on_config_select = None
         self.on_mode_toggle = None
+        
+        self.layout_frame_create_config = None
 
         self.setup_styles()
         self.create_layout()
@@ -358,6 +360,7 @@ class TkGUIManager:
 
     def create_config_ui(self, parent, window_titles, save_callback, settings_callback, refresh_callback):
         parent.attributes('-disabled', True)
+        entry_font = ('Consolas 12')
 
         def on_close():
             parent.attributes('-disabled', False)
@@ -381,8 +384,13 @@ class TkGUIManager:
             settings_frame.configure(style="TFrame")
             settings_frame.pack(fill='both', expand=True, padx=10, pady=10)
 
+            sorted_windows = sorted(
+                selected_windows,
+                key=lambda title: int((settings_callback(title) or {}).get("position", "0,0").split(",")[0])
+            )
+
             settings_vars = {}
-            for row, title in enumerate(selected_windows):
+            for row, title in enumerate(sorted_windows):
                 values = settings_callback(title) or {}
                 pos_var = tk.StringVar(value=values.get("position", "0,0"))
                 size_var = tk.StringVar(value=values.get("size", "100,100"))
@@ -390,32 +398,35 @@ class TkGUIManager:
                 titlebar_var = tk.BooleanVar(value=values.get("titlebar", "true") == "true")
                 name_var = tk.StringVar(value=clean_window_title(title, sanitize=True))
 
-                settings_vars[title] = (pos_var, size_var, aot_var, titlebar_var, name_var)
-                
+                settings_vars[title] = [pos_var, size_var, aot_var, titlebar_var, name_var]
+
                 tk.Entry(settings_frame,
                     textvariable=name_var,
                     width=25,
                     bg=self.background,
                     fg=self.text_normal,
-                    insertbackground=self.text_normal
+                    insertbackground=self.text_normal,
+                    font=entry_font
                 ).grid(row=row, column=0, padx=(0, 10))
 
-                ttk.Label(settings_frame, text="Position (x,y):").grid(row=row, column=1)
+                ttk.Label(settings_frame, text="Position (x,y):", font=entry_font).grid(row=row, column=1)
                 tk.Entry(settings_frame,
                     textvariable=pos_var,
                     width=10,
                     bg=self.background,
                     fg=self.text_normal,
-                    insertbackground=self.text_normal
+                    insertbackground=self.text_normal,
+                    font=entry_font
                 ).grid(row=row, column=2)
 
-                ttk.Label(settings_frame, text="Size (w,h):").grid(row=row, column=3)
+                ttk.Label(settings_frame, text="Size (w,h):", font=entry_font).grid(row=row, column=3)
                 tk.Entry(settings_frame,
                     textvariable=size_var,
                     width=10,
                     bg=self.background,
                     fg=self.text_normal,
-                    insertbackground=self.text_normal
+                    insertbackground=self.text_normal,
+                    font=entry_font
                 ).grid(row=row, column=4)
 
                 tk.Checkbutton(settings_frame,
@@ -425,7 +436,8 @@ class TkGUIManager:
                     fg=self.text_normal,
                     selectcolor=self.window_normal,
                     activebackground=self.window_normal_dark,
-                    activeforeground=self.text_normal
+                    activeforeground=self.text_normal,
+                    font=entry_font
                 ).grid(row=row, column=5)
                 
                 tk.Checkbutton(settings_frame,
@@ -435,20 +447,78 @@ class TkGUIManager:
                     fg=self.text_normal,
                     selectcolor=self.window_normal,
                     activebackground=self.window_normal_dark,
-                    activeforeground=self.text_normal
+                    activeforeground=self.text_normal,
+                    font=entry_font
                 ).grid(row=row, column=6)
 
             row += 1
-            ttk.Label(settings_frame, text="Config Name: ").grid(row=row, column=1, pady=(20, 0), sticky='w')
+            pady = (20,0)
+            ttk.Label(settings_frame, text="Config Name: ", font=entry_font).grid(row=row, column=1, pady=pady)
             config_name_var = tk.StringVar()
             tk.Entry(settings_frame,
                 textvariable=config_name_var,
                 bg=self.background,
                 fg=self.text_normal,
                 insertbackground=self.text_normal
-                ).grid(row=row, column=2, columnspan=3, pady=(20, 0), sticky='ew')
+                ).grid(row=row, column=2, columnspan=2, pady=pady, sticky='ew')
 
             self.apply_titlebar_style()
+
+            # Layout frame placeholder
+            layout_container_create_config = ttk.Frame(settings_frame, padding=UIConstants.MARGIN)
+            layout_container_create_config.configure(style="TFrame")
+            layout_container_create_config.grid(row=row+2, column=0, columnspan=7, sticky='nsew')
+            settings_frame.rowconfigure(row+2, weight=10)
+            for col in range(7):
+                settings_frame.columnconfigure(col, weight=1)
+            self.layout_frame_create_config = None  # Will hold the ScreenLayoutFrame for create config
+
+            def validate_int_pair(value, default=(0,0)):
+                try:
+                    x, y = map(int, value.split(','))
+                    return x, y
+                except (ValueError, AttributeError):
+                    return default
+
+            def update_layout_frame():
+                windows = []
+                try:
+                    for title, vars_ in settings_vars.items():
+                        pos, size, aot, titlebar, name_var = vars_
+                        name = name_var.get().strip() or ''
+                        pos_x, pos_y = validate_int_pair(pos.get())
+                        size_w, size_h = validate_int_pair(size.get())
+                        always_on_top = aot.get() or False
+                        window_exists = True
+                        windows.append(WindowInfo(name,
+                                                pos_x, pos_y,
+                                                size_w, size_h,
+                                                always_on_top,
+                                                window_exists
+                                                ))
+                    # Remove the old layout before redrawing
+                    if self.layout_frame_create_config:
+                        self.layout_frame_create_config.destroy()                    
+
+                    self.layout_frame_create_config = ScreenLayoutFrame(layout_container_create_config,
+                                                                self.root.winfo_screenwidth(),
+                                                                self.root.winfo_screenheight(),
+                                                                windows,
+                                                                self.theme
+                                                                )
+                    self.layout_frame_create_config.pack(expand=True, fill='both')
+                except Exception as e:
+                    print(f"Failed to draw layout: {e}")
+
+            def auto_position():
+                for num, title in enumerate(sorted_windows):
+                    vars = settings_vars[title]
+                    size_w = self.root.winfo_screenwidth() / len(sorted_windows)
+                    size_h = self.root.winfo_screenheight() if vars[2].get() else self.root.winfo_screenheight() - UIConstants.TASKBAR_HEIGHT
+                    pos_x = size_w * num
+                    settings_vars[title][0].set(f'{int(pos_x)},0')
+                    settings_vars[title][1].set(f'{int(size_w)},{int(size_h)}')
+                update_layout_frame()
 
             def on_save():
                 config_data = {}
@@ -461,8 +531,7 @@ class TkGUIManager:
                         'titlebar': titlebar.get(),
                         'name': name_var.get().strip()
                     }
-                name = config_name_var.get().strip()
-                name = re.sub(r'[<>:"/\\|?*]', '', name)
+                name = clean_window_title(config_name_var.get())
                 if not name:
                     messagebox.showerror("Error", "Config name is required")
                     return
@@ -471,7 +540,12 @@ class TkGUIManager:
                         refresh_callback(name)
                     on_close()
 
-            ttk.Button(settings_frame, text="Save Config", command=on_save).grid(row=row+1, column=0, columnspan=7, pady=15)
+            update_layout_frame()
+            ttk.Button(settings_frame, text="Auto align", command=auto_position, width=15).grid(row=row, column=0, pady=pady, sticky='w')
+            ttk.Button(settings_frame, text="Update drawing", command=update_layout_frame, width=15).grid(row=row+1, column=0, pady=pady, sticky='w')
+            ttk.Button(settings_frame, text="Save Config", command=on_save, width=30).grid(row=row, column=4, columnspan=2, pady=pady)
+
+            config_win.geometry(f"{UIConstants.WINDOW_WIDTH+200}x{UIConstants.WINDOW_HEIGHT+100}")
 
         config_win = tk.Toplevel(parent)
         config_win.title("Create Config")
@@ -498,7 +572,7 @@ class TkGUIManager:
         selection_frame.configure(style='TFrame')
         selection_frame.pack(fill='both', expand=True)
 
-        ttk.Label(selection_frame, text="Select windows (max 4):").pack(pady=10)
+        ttk.Label(selection_frame, text="Select windows (max 4):", font=entry_font).pack(pady=10)
 
         switches = {}
         for title in window_titles:
@@ -514,13 +588,25 @@ class TkGUIManager:
                 activeforeground=self.text_normal,
                 relief=tk.FLAT,
                 highlightthickness=0,
-                bd=0
+                bd=0,
+                font=entry_font
             )
 
             cb.pack(anchor='w')
             switches[title] = var
 
-        ttk.Button(selection_frame, text="Confirm Selection", command=confirm_selection).pack(pady=10)
+        ttk.Button(selection_frame, text="Confirm Selection", command=confirm_selection, width=45).pack(pady=10)
+
+
+
+
+
+#################################
+#                               #
+#   Screen layout canvas class  #
+#                               #
+#################################
+
 
 class ScreenLayoutFrame(ttk.Frame):
     def __init__(self, parent, screen_width, screen_height, windows: List[WindowInfo], theme):

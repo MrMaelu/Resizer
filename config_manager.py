@@ -65,7 +65,7 @@ class ConfigManager:
             print(f"Error saving settings: {e}")
             return False
 
-    def detect_default_config(self, window_manager):
+    def detect_default_config(self):
         # Detect and return the best default configuration
         config_files, config_names = self.list_config_files()
         
@@ -131,8 +131,10 @@ class ConfigManager:
             config_path = os.path.join(self.config_dir, f"config_{config_name}.ini")
             print(f"Writing to file: {config_path}")
 
-            with open(config_path, 'w', encoding='utf-8') as configfile:
-                validated_config.write(configfile)
+            with open(config_path, 'w', encoding='utf-8') as config:
+                validated_config.write(config)
+                config.flush()
+                os.fsync(config.fileno())                
 
             print("Config saved successfully")
             return True
