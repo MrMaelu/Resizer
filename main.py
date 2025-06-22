@@ -5,26 +5,26 @@ import tkinter as tk
 import tkinter.messagebox as messagebox
 
 # Local imports
-from config_manager import ConfigManager
-from window_manager import WindowManager
-from constants import UIConstants
-from layout import TkGUIManager
-from utils import WindowInfo
+from lib.config_manager import ConfigManager
+from lib.window_manager import WindowManager
+from lib.constants import UIConstants
+from lib.layout import TkGUIManager
+from lib.utils import WindowInfo
+from lib.asset_manager import AssetManager
 
 class ApplicationState:
     def __init__(self):
-        # Core references
-        self._app = None
-        
-        # Initialize managers first
+        # Initialize managers
         self.window_manager = None
         self.config_manager = None
+        self.asset_manager = None
         
         # System state
         self.is_admin = False
         
         # UI state
         self.compact = False
+        self.use_images = False
         self.waiting_for_window_selection = False
         self.selected_window_hwnd = None
         
@@ -37,7 +37,7 @@ class ApplicationState:
         self.config_names = []
         self.config = None
         
-        # UI elements - initialized later by GUI manager
+        # UI elements
         self.status_label = None
         self.always_on_top_status = None
         self.config_dropdown = None
@@ -49,14 +49,6 @@ class ApplicationState:
         self.toggle_compact_button = None
         self.toggle_button = None
         self.screen_canvas = None
-        
-    @property
-    def app(self):
-        return self._app
-
-    @app.setter
-    def app(self, value):
-        self._app = value
 
 
 ######################
@@ -69,7 +61,7 @@ class ApplicationState:
         config = self.config_manager.load_config(selected_config)
         if config:
             # Find matching windows
-            matching_windows, missing_windows = self.window_manager.find_matching_windows(config)
+            matching_windows, _ = self.window_manager.find_matching_windows(config)
             
             # Reset any existing windows first
             self.window_manager.reset_all_windows()
@@ -137,20 +129,20 @@ class ApplicationState:
             selected_config = self.config_files[idx]
             loaded_config = self.config_manager.load_config(selected_config)
             self.config = self.config_manager.validate_and_repair_config(loaded_config)
-            existing_windows, missing_windows = self.window_manager.find_matching_windows(self.config)
+            _, missing_windows = self.window_manager.find_matching_windows(self.config)
             if not self.app.compact_mode:
                 self.compute_window_layout(self.config, missing_windows)
             else:
                 self.update_managed_windows_list(self.config)
 
-    def on_mode_toggle(self=None, startup=False):
+    def toggle_compact_mode(self=None, startup=False):
         self.app.toggle_compact(startup)
         self.compact = self.app.compact_mode
-        self.config_manager.save_settings(self.compact)
+        self.save_settings()
         if self.app.compact_mode:
             self.update_managed_windows_list(self.config)
         else:
-            existing_windows, missing_windows = self.window_manager.find_matching_windows(self.config)
+            _, missing_windows = self.window_manager.find_matching_windows(self.config)
             self.compute_window_layout(self.config, missing_windows)
 
     def delete_config(self):
@@ -171,6 +163,13 @@ class ApplicationState:
         self.app.change_gui_theme()
         if self.app.compact_mode:
             self.update_managed_windows_list(self.config)
+
+    def toggle_images(self):
+        self.app.use_images = not self.app.use_images
+        self.save_settings()
+        _, missing_windows = self.window_manager.find_matching_windows(self.config)
+        self.compute_window_layout(self.config, missing_windows)
+
 
 ######################
 
@@ -212,14 +211,16 @@ class ApplicationState:
                     size_w, size_h = map(int, size.split(','))
                     always_on_top = config[section].get("always_on_top", "false").lower() == "true"
                     window_exists = section not in missing_windows
+                    search_title = config[section].get("search_title") or section
                     positioned_windows.append(WindowInfo(section,
                                                          pos_x, pos_y,
                                                          size_w, size_h,
                                                          always_on_top,
-                                                         window_exists
+                                                         window_exists,
+                                                         search_title
                                                          ))
 
-            self.app.set_layout_frame(self.screen_width, self.screen_height, positioned_windows)
+            self.app.set_layout_frame(positioned_windows)
 
     def update_config_list(self, config=None, retries=3):
         self.config_files, self.config_names = self.config_manager.list_config_files()
@@ -228,6 +229,8 @@ class ApplicationState:
             self.app.combo_box.var.set(config or self.config_names[0])
             self.on_config_select(config or self.config_manager.detect_default_config())
 
+    def save_settings(self):
+        self.config_manager.save_settings(self.compact, self.app.use_images)
 
 def load_tk_GUI():
     root = tk.Tk()
@@ -239,40 +242,30 @@ def load_tk_GUI():
         "restart_as_admin": state.restart_as_admin,
         "toggle_AOT": state.toggle_always_on_top,
         "config_selected": state.on_config_select,
-        "toggle_compact": state.on_mode_toggle,
+        "toggle_compact": state.toggle_compact_mode,
         "delete_config": state.delete_config,
         "theme": state.theme,
+        "toggle_images": state.toggle_images,
     }
     app = TkGUIManager(root, callbacks=callbacks, compact=state.compact, is_admin=state.is_admin)
     state.app = app
-    
     state.app.compact_mode = state.compact
+    state.app.use_images = state.use_images
     
-    # Get screen resolution
-    state.screen_width = app.root.winfo_screenwidth()
-    state.screen_height = app.root.winfo_screenheight()
-
-    # Set GUI size and position
-    x = (state.screen_width // 2) - (UIConstants.WINDOW_WIDTH // 2)
-    y = (state.screen_height // 2) - (UIConstants.WINDOW_HEIGHT // 2)
-    root.geometry(f"{UIConstants.WINDOW_WIDTH}x{UIConstants.WINDOW_HEIGHT}+{x}+{y}")
-
-    # Update screen resolution label text
-    app.resolution_label["text"] = f"{state.screen_width} x {state.screen_height}"
-
     # Set default config
-
-    if state.compact: state.on_mode_toggle(startup=True)
-    
+    if state.compact: state.toggle_compact_mode(startup=True)
     default_config = state.config_manager.detect_default_config()
-    
     state.update_config_list(default_config)
-    
+
+    # Start main GUI
     state.app.root.mainloop()
-    
+
+
 
 if __name__ == "__main__":
     # Get application base path
+    #   Needed to make the application work the same when running
+    #   as script as well as .exe
     if getattr(sys, 'frozen', False):
         base_path = os.path.dirname(sys.executable)
     else:
@@ -282,7 +275,8 @@ if __name__ == "__main__":
     state = ApplicationState()
     state.window_manager = WindowManager()
     state.config_manager = ConfigManager(base_path, state.window_manager)
-
+    state.asset_manager = AssetManager()
+    
     # Set config folder
     config_dir = os.path.join(base_path, "configs")
     if not os.path.exists(config_dir):
@@ -290,7 +284,7 @@ if __name__ == "__main__":
 
     # Load settings
     settings_file = os.path.join(base_path, "settings.json")
-    state.compact = state.config_manager.load_settings()
+    state.compact, state.use_images = state.config_manager.load_settings()
 
     # Check for admin rights
     try:

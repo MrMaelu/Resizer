@@ -1,8 +1,8 @@
 import tkinter as tk
 
 # Local imports
-from constants import Fonts, Colors, Themes
-from utils import choose_color
+from lib.constants import Fonts, Colors, Themes
+from lib.utils import choose_color
 
 class CustomDropdown(tk.Frame):
     def __init__(self, parent, values, command=None, width=28, **kwargs):

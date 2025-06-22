@@ -2,9 +2,9 @@ import win32gui
 import win32con
 import traceback
 import pygetwindow as gw
-import win32api
-import time
-from utils import clean_window_title
+
+# Local imports
+from lib.utils import clean_window_title
 
 class WindowManager:
     def __init__(self):
@@ -76,24 +76,6 @@ class WindowManager:
             self.restore_window_frame(hwnd)
             self.remove_managed_window(hwnd)
 
-    def get_window_info(self, window_title):
-        # Get window information by title
-        try:
-            window = gw.getWindowsWithTitle(window_title)
-            if window and window[0]:
-                window = window[0]
-                # Sanitize the title before returning
-                clean_title = clean_window_title(window_title, sanitize=True)
-                return {
-                    'hwnd': window._hWnd,
-                    'title': clean_title,
-                    'pos': (window.left, window.top),  # Fixed tuple syntax
-                    'size': (window.width, window.height)  # Fixed tuple syntax
-                }
-        except Exception as e:
-            print(f"Error getting window info: {e}")
-        return None
-
     def get_always_on_top_status(self):
         # Get status of always-on-top windows
         count = 0
@@ -105,32 +87,6 @@ class WindowManager:
                     count += 1
 
         return f"AOT: {count} window{'s' if count > 1 else ''}"
-
-    def check_window_valid(self, hwnd):
-        # Check if a window handle is still valid
-        try:
-            return win32gui.IsWindow(hwnd)
-        except Exception:
-            return False
-
-    def cleanup_invalid_windows(self):
-        # Remove any invalid windows from management
-        try:
-            invalid_windows = [hwnd for hwnd in self.managed_windows 
-                             if not self.check_window_valid(hwnd)]
-            
-            for hwnd in invalid_windows:
-                if hwnd in self._window_states:
-                    del self._window_states[hwnd]
-                if hwnd in self.topmost_windows:
-                    self.topmost_windows.remove(hwnd)
-                self.managed_windows.remove(hwnd)
-                
-            return len(invalid_windows)
-        except Exception as e:
-            print(f"Error cleaning up invalid windows: {e}")
-            traceback.print_exc()
-            return 0
 
     def set_window_position(self, hwnd, x, y):
         # Set window position with error handling
@@ -170,13 +126,6 @@ class WindowManager:
         except Exception as e:
             print(f"Error getting window title for {hwnd}: {e}")
             return ""
-
-    def is_window_visible(self, hwnd):
-        # Check if window is visible with error handling
-        try:
-            return win32gui.IsWindowVisible(hwnd)
-        except Exception:
-            return False
 
     def get_window_metrics(self, hwnd):
         # Get comprehensive window metrics
@@ -345,48 +294,6 @@ class WindowManager:
             traceback.print_exc()
             return [], []
 
-    def get_window_info_for_config(self, hwnd):
-        # Get window information in config-friendly format
-        try:
-            window = gw.Window(hwnd)
-            return {
-                'title': win32gui.GetWindowText(hwnd),
-                'position': window.topleft,
-                'size': window.size,
-                'always_on_top': hwnd in self.topmost_windows,
-                'has_titlebar': bool(win32gui.GetWindowLong(hwnd, win32con.GWL_STYLE) & win32con.WS_CAPTION)
-            }
-        except Exception as e:
-            print(f"Error getting window info: {e}")
-            traceback.print_exc()
-            return None
-
-    def find_window_by_title(self, title):
-        # Find window by title (with partial matching)
-        try:
-            windows = gw.getWindowsWithTitle(title)
-            return windows[0]._hWnd if windows else None
-        except Exception as e:
-            print(f"Error finding window: {e}")
-            traceback.print_exc()
-            return None
-
-    def manage_selected_window(self, hwnd):
-        # Manage a list of selected window handles
-        try:
-            if not hwnd or not win32gui.IsWindow(hwnd):
-                return False
-        
-            self.add_managed_window(hwnd)
-            self.set_always_on_top(hwnd, True)
-            self.make_borderless(hwnd)
-            return True
-        
-        except Exception as e:
-            print(f"Error managing window {hwnd}: {e}")
-            traceback.print_exc()
-            return False
-        
     def toggle_always_on_top(self, hwnd):
         # Toggle always-on-top state for a window
         try:
@@ -399,28 +306,6 @@ class WindowManager:
         except Exception as e:
             print(f"Error toggling always-on-top: {e}")
             return False
-
-    def listen_for_window_click(self, app_window_title):
-        # Listen for window click and return clicked window handle
-        try:
-            # Get the HWND of Toga application window
-            app_hwnd = self.find_window_by_title(app_window_title)
-            
-            while True:
-                if win32api.GetAsyncKeyState(0x01) & 0x8000:
-                    cursor_pos = win32gui.GetCursorPos()
-                    hwnd_at_cursor = win32gui.WindowFromPoint(cursor_pos)
-                    
-                    if hwnd_at_cursor and hwnd_at_cursor != app_hwnd:
-                        root_hwnd = win32gui.GetAncestor(hwnd_at_cursor, win32con.GA_ROOT)
-                        if root_hwnd and root_hwnd != app_hwnd:
-                            return root_hwnd
-                
-                time.sleep(0.1)
-                
-        except Exception as e:
-            print(f"Error in window click detection: {e}")
-            return None
 
     def get_all_window_titles(self):
         # Get a list of all visible window titles
@@ -449,22 +334,3 @@ class WindowManager:
             "Windows Shell Experience Host"
         ]
         return any(sys_win.lower() in title.lower() for sys_win in system_windows)
-
-    def get_window_info(self, title):
-        # Get position and size information for a window
-        try:
-            hwnd = win32gui.FindWindow(None, title)
-            if not hwnd:
-                return None
-
-            rect = win32gui.GetWindowRect(hwnd)
-            return {
-                "position": (rect[0], rect[1]),
-                "size": (rect[2] - rect[0], rect[3] - rect[1]),
-                "title": title,
-                "hwnd": hwnd
-            }
-        except Exception as e:
-            print(f"Error getting window info: {e}")
-            return None
-

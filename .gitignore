@@ -9,6 +9,9 @@ dist/
 *.egg-info/
 .eggs/
 *.whl
+*.spec
+uv.lock
+
 
 # Installer logs
 pip-log.txt
@@ -58,9 +61,13 @@ desktop.ini
 
 # Application specific
 config_*.ini
-!config_example*.ini
 test.py
 configs
 settings.json
+assets
+_assets
+client_secrets.py
+
 
 # Others
+tmp_*

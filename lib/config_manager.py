@@ -1,12 +1,13 @@
 import re
 import os
-import configparser
 import json
-import traceback
 import win32gui
 import win32con
+import configparser
 import pygetwindow as gw
-from utils import clean_window_title
+
+# Local imports
+from lib.utils import clean_window_title
 
 class ConfigManager:
     def __init__(self, base_path, window_manager=None):
@@ -39,27 +40,28 @@ class ConfigManager:
             return None
         except Exception as e:
             print(f"Error loading config file {config_path}: {e}")
-            traceback.print_exc()
             return None
 
     def load_settings(self):
         # Load application settings
+        defaults = False, False
         try:
             if os.path.exists(self.settings_file):
                 with open(self.settings_file, 'r') as f:
                     settings = json.load(f)
-                    return settings.get('compact', True)
-                return True
-            return True
+                    compact = settings.get('compact', False)
+                    use_images = settings.get('use_images', False)
+                    return compact, use_images
+            return defaults
         except Exception as e:
             print(f"Error loading settings: {e}")
-            return True
+            return defaults
 
-    def save_settings(self, compact_mode):
+    def save_settings(self, compact_mode, use_images):
         # Save application settings
         try:
             with open(self.settings_file, 'w') as f:
-                json.dump({'compact': compact_mode}, f)
+                json.dump({'compact': compact_mode, 'use_images': use_images}, f)
             return True
         except Exception as e:
             print(f"Error saving settings: {e}")

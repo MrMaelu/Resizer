@@ -10,6 +10,7 @@ class WindowInfo:
     height: int
     always_on_top: bool
     exists: bool
+    search_title: str
 
 def clean_window_title(title, sanitize=False):
     if not title:
