@@ -55,6 +55,8 @@ class TkGUIManager:
         self.open_config_folder = None
         self.restart_as_admin = None
         self.toggle_AOT = None
+        self.image_folder = None
+        self.download_images = None
         self.toggle_images = None
 
         self.on_config_select = None
@@ -260,6 +262,16 @@ class TkGUIManager:
         self.image_button = ttk.Button(self.aot_button_frame, text="Toggle images", width=20,
                                 command=self.callbacks.get("toggle_images") or self.toggle_images)
         self.image_button.pack(side=tk.RIGHT, anchor=tk.W)
+        
+        # Image download button
+        self.image_download_button = ttk.Button(self.aot_button_frame, text="Download images", width=20,
+                                command=self.callbacks.get("download_images") or self.download_images)
+        self.image_download_button.pack(side=tk.RIGHT, anchor=tk.W)
+
+        # Image folder button
+        self.image_download_button = ttk.Button(self.aot_button_frame, text="Open image folder", width=20,
+                                command=self.callbacks.get("image_folder") or self.image_folder)
+        self.image_download_button.pack(side=tk.RIGHT, anchor=tk.W)
 
     def setup_managed_text(self):
         # Create managed windows frame if not exists
@@ -304,13 +316,13 @@ class TkGUIManager:
             self.managed_text = None
         self.managed_frame.pack_forget()
     
-    def set_layout_frame(self, windows):
+    def set_layout_frame(self, windows, assets_dir):
         # Clear old frame
         if self.layout_frame:
             self.layout_frame.destroy()
 
         # Create and pack new layout frame
-        self.layout_frame = ScreenLayoutFrame(self.layout_container, self.res_x, self.res_y, windows, self.theme, self.image_cache, asset_manager=self.asset_manager, use_images=self.use_images, failed_downloads=self.failed_downloads)
+        self.layout_frame = ScreenLayoutFrame(self.layout_container, self.res_x, self.res_y, windows, self.theme, self.image_cache, asset_manager=self.asset_manager, assets_dir=assets_dir, use_images=self.use_images, failed_downloads=self.failed_downloads)
         self.layout_frame.pack(fill=tk.BOTH, expand=True)
 
     def scale_gui(self):
@@ -501,6 +513,7 @@ class TkGUIManager:
                     return default
 
             def update_layout_frame():
+                assets_dir = ''
                 windows = []
                 try:
                     for title, vars_ in settings_vars.items():
@@ -528,6 +541,7 @@ class TkGUIManager:
                                                                 self.theme,
                                                                 self.image_cache,
                                                                 self.asset_manager,
+                                                                assets_dir,
                                                                 self.failed_downloads
                                                                 )
                     self.layout_frame_create_config.pack(expand=True, fill='both')
@@ -631,13 +645,13 @@ class TkGUIManager:
 
 
 class ScreenLayoutFrame(ttk.Frame):
-    def __init__(self, parent, screen_width, screen_height, windows: List[WindowInfo], theme, image_cache, asset_manager, failed_downloads, use_images=False):
+    def __init__(self, parent, screen_width, screen_height, windows: List[WindowInfo], theme, image_cache, asset_manager, assets_dir, failed_downloads, use_images=False):
         super().__init__(parent)
         self.windows = windows
         self.update_colors(theme)
         
         self.asset_manager = asset_manager
-        self.assets_dir = "assets"
+        self.assets_dir = assets_dir
         self.image_cache = image_cache
         self.use_images = use_images
         self.failed_downloads = failed_downloads
@@ -776,22 +790,6 @@ class ScreenLayoutFrame(ttk.Frame):
                             break
                         except Exception as e:
                             print(f"Error loading image: {e}")
-                    elif image_path in self.failed_downloads:
-                        #print("Download failed, creating dummy image")
-                        shade = 100
-                        image = Image.new('RGB', (1,1), (shade,shade,shade))
-                        image.save(image_path)
-                        break
-                    else:
-                        print(f"Attempting to download image for {win.search_title}")
-                        # Download image
-                        download_success = self.asset_manager.search(win.search_title, save_dir=self.assets_dir)
-                        if download_success:
-                            #print(f"Image downloaded to {image_path}")
-                            self._draw_layout(width, height)
-                        else:
-                            self.failed_downloads.append(image_path)
-                        break
 
             # Prepare info text lines
             info_lines = [

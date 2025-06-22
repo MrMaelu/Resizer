@@ -3,13 +3,15 @@ import sys
 from ctypes import windll
 import tkinter as tk
 import tkinter.messagebox as messagebox
+from PIL import Image
+import threading
 
 # Local imports
 from lib.config_manager import ConfigManager
 from lib.window_manager import WindowManager
 from lib.constants import UIConstants
 from lib.layout import TkGUIManager
-from lib.utils import WindowInfo
+from lib.utils import WindowInfo, clean_window_title
 from lib.asset_manager import AssetManager
 
 class ApplicationState:
@@ -18,6 +20,9 @@ class ApplicationState:
         self.window_manager = None
         self.config_manager = None
         self.asset_manager = None
+
+        # Assets
+        self.assets_dir = None
         
         # System state
         self.is_admin = False
@@ -36,6 +41,7 @@ class ApplicationState:
         self.config_files = []
         self.config_names = []
         self.config = None
+        self.config_dir = None
         
         # UI elements
         self.status_label = None
@@ -103,8 +109,11 @@ class ApplicationState:
 
     def open_config_folder(self):
         # Open the config folder in File Explorer
-        if sys.platform == "win32":
-            os.startfile(config_dir)
+        try:
+            if sys.platform == "win32":
+                os.startfile(self.config_dir)
+        except Exception as e:
+            print(f"Can't open config folder: {e}")
 
     def restart_as_admin(self):
         # Restart the application with admin privileges
@@ -164,15 +173,51 @@ class ApplicationState:
         if self.app.compact_mode:
             self.update_managed_windows_list(self.config)
 
+    def open_image_folder(self):
+        # Open the image folder in File Explorer
+        try:
+            if sys.platform == "win32":
+                os.startfile(self.assets_dir)
+        except Exception as e:
+            print(f"Can't open image folder: {e}")
+
+    def download_screenshots_threaded(self):
+        threading.Thread(target=self.download_screenshots, daemon=True).start()
+                        
     def toggle_images(self):
         self.app.use_images = not self.app.use_images
         self.save_settings()
         _, missing_windows = self.window_manager.find_matching_windows(self.config)
         self.compute_window_layout(self.config, missing_windows)
 
-
 ######################
 
+    def download_screenshots(self):
+        config_files, config_names = self.config_manager.list_config_files()
+        for config_file in config_files:
+            config = self.config_manager.load_config(config_file)
+            if not config:
+                continue
+
+            for section in config.sections():
+                title = config[section].get("search_title", fallback=section)
+                cleaned_title = clean_window_title(title, sanitize=True)
+                image_path = os.path.join(self.assets_dir, f"{cleaned_title}.jpg")
+
+                if not os.path.exists(image_path):
+                    download_success = self.asset_manager.search(cleaned_title, save_dir=self.assets_dir)
+                    if not download_success:
+                        try:
+                            print("Download failed, creating dummy image")
+                            shade = 100
+                            image = Image.new('RGB', (1,1), (shade,shade,shade))
+                            image.save(image_path)
+                            break
+                        except Exception as e:
+                            print(f"Failed to create dummy image: {e}")
+                    else:
+                        print(f"Image downloaded to {image_path}")
+        self.on_config_select(self.config)
 
     def update_always_on_top_status(self):
         try:
@@ -220,7 +265,7 @@ class ApplicationState:
                                                          search_title
                                                          ))
 
-            self.app.set_layout_frame(positioned_windows)
+            self.app.set_layout_frame(positioned_windows, self.assets_dir)
 
     def update_config_list(self, config=None, retries=3):
         self.config_files, self.config_names = self.config_manager.list_config_files()
@@ -245,6 +290,8 @@ def load_tk_GUI():
         "toggle_compact": state.toggle_compact_mode,
         "delete_config": state.delete_config,
         "theme": state.theme,
+        "image_folder": state.open_image_folder,
+        "download_images": state.download_screenshots_threaded,
         "toggle_images": state.toggle_images,
     }
     app = TkGUIManager(root, callbacks=callbacks, compact=state.compact, is_admin=state.is_admin)
@@ -277,10 +324,15 @@ if __name__ == "__main__":
     state.config_manager = ConfigManager(base_path, state.window_manager)
     state.asset_manager = AssetManager()
     
-    # Set config folder
-    config_dir = os.path.join(base_path, "configs")
-    if not os.path.exists(config_dir):
-        os.makedirs(config_dir)
+    # Set config and asset folders
+    state.config_dir = os.path.join(base_path, "configs")
+    if not os.path.exists(state.config_dir):
+        os.makedirs(state.config_dir)
+
+    # Set assets folder (for images)
+    state.assets_dir = os.path.join(base_path, "assets")
+    if not os.path.exists(state.assets_dir):
+        os.makedirs(state.assets_dir)
 
     # Load settings
     settings_file = os.path.join(base_path, "settings.json")
