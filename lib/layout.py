@@ -70,6 +70,7 @@ class TkGUIManager:
 
         self.setup_styles()
         self.create_layout()
+        self.manage_image_buttons(destroy=False)
         self.root.after(100, self.apply_titlebar_style)
 
     def setup_styles(self):
@@ -258,20 +259,26 @@ class TkGUIManager:
                                 command=self.callbacks.get("toggle_AOT") or self.toggle_AOT)
         aot_button.pack(side=tk.LEFT, anchor=tk.W)
 
-        # Image toggle button
-        self.image_button = ttk.Button(self.aot_button_frame, text="Toggle images", width=20,
-                                command=self.callbacks.get("toggle_images") or self.toggle_images)
-        self.image_button.pack(side=tk.RIGHT, anchor=tk.W)
-        
-        # Image download button
-        self.image_download_button = ttk.Button(self.aot_button_frame, text="Download images", width=20,
-                                command=self.callbacks.get("download_images") or self.download_images)
-        self.image_download_button.pack(side=tk.RIGHT, anchor=tk.W)
+    def manage_image_buttons(self, destroy=False):
+        if destroy:
+            self.image_button.destroy()
+            self.image_download_button.destroy()
+            self.image_folder_button.destroy()
+        else:
+            # Image toggle button
+            self.image_button = ttk.Button(self.aot_button_frame, text="Toggle images", width=20,
+                                    command=self.callbacks.get("toggle_images") or self.toggle_images)
+            self.image_button.pack(side=tk.RIGHT, anchor=tk.W)
+            
+            # Image download button
+            self.image_download_button = ttk.Button(self.aot_button_frame, text="Download images", width=20,
+                                    command=self.callbacks.get("download_images") or self.download_images)
+            self.image_download_button.pack(side=tk.RIGHT, anchor=tk.W)
 
-        # Image folder button
-        self.image_download_button = ttk.Button(self.aot_button_frame, text="Open image folder", width=20,
-                                command=self.callbacks.get("image_folder") or self.image_folder)
-        self.image_download_button.pack(side=tk.RIGHT, anchor=tk.W)
+            # Image folder button
+            self.image_folder_button = ttk.Button(self.aot_button_frame, text="Open image folder", width=20,
+                                    command=self.callbacks.get("image_folder") or self.image_folder)
+            self.image_folder_button.pack(side=tk.RIGHT, anchor=tk.W)
 
     def setup_managed_text(self):
         # Create managed windows frame if not exists
@@ -367,7 +374,7 @@ class TkGUIManager:
             for child in self.buttons_2_container.winfo_children():
                 child.pack_configure(side=tk.TOP, fill=tk.X)
             
-            self.image_button.destroy()
+            self.manage_image_buttons(destroy=True)
 
             self.setup_managed_text()
         else:
@@ -384,9 +391,7 @@ class TkGUIManager:
 
             self.remove_managed_windows_frame()
 
-            self.image_button = ttk.Button(self.aot_button_frame, text="Toggle images", width=20,
-                                command=self.callbacks.get("toggle_images") or self.toggle_images)
-            self.image_button.pack(side=tk.RIGHT, anchor=tk.W)
+            self.manage_image_buttons(destroy=False)
         
         self.scale_gui()
 
