@@ -1,18 +1,18 @@
 import os
 import sys
-from ctypes import windll
-import tkinter as tk
-import tkinter.messagebox as messagebox
-from PIL import Image
+import importlib
 import threading
+import tkinter as tk
+from ctypes import windll
+import tkinter.messagebox as messagebox
 
 # Local imports
-from lib.config_manager import ConfigManager
-from lib.window_manager import WindowManager
-from lib.constants import UIConstants
 from lib.layout import TkGUIManager
-from lib.utils import WindowInfo, clean_window_title
+from lib.constants import UIConstants
 from lib.asset_manager import AssetManager
+from lib.window_manager import WindowManager
+from lib.config_manager import ConfigManager
+from lib.utils import WindowInfo, clean_window_title
 
 class ApplicationState:
     def __init__(self):
@@ -26,6 +26,11 @@ class ApplicationState:
         
         # System state
         self.is_admin = False
+        
+        # Client ID / secret
+        self.CLIENT_ID = None
+        self.CLIENT_SECRET = None
+        self.client_info_missing = True
         
         # UI state
         self.compact = False
@@ -186,38 +191,69 @@ class ApplicationState:
                         
     def toggle_images(self):
         self.app.use_images = not self.app.use_images
+        self.app.image_label['text'] = f"Use images: {self.app.use_images}"
         self.save_settings()
         _, missing_windows = self.window_manager.find_matching_windows(self.config)
         self.compute_window_layout(self.config, missing_windows)
 
 ######################
 
-    def download_screenshots(self):
-        config_files, config_names = self.config_manager.list_config_files()
-        for config_file in config_files:
-            config = self.config_manager.load_config(config_file)
-            if not config:
+    def check_igdb_client_info(self):
+        for module_name in ("lib.client_secrets", "client_secrets"):
+            try:
+                secrets = importlib.import_module(module_name)
+                self.CLIENT_ID = secrets.CLIENT_ID
+                self.CLIENT_SECRET = secrets.CLIENT_SECRET
+                if self.CLIENT_ID.strip() != '' and self.CLIENT_SECRET.strip() != '':
+                    self.client_info_missing = False
+                break
+            except ModuleNotFoundError:
                 continue
 
-            for section in config.sections():
-                title = config[section].get("search_title", fallback=section)
-                cleaned_title = clean_window_title(title, sanitize=True)
-                image_path = os.path.join(self.assets_dir, f"{cleaned_title}.jpg")
+    def download_screenshots(self):
+            # List to hold all titles
+            search_titles_list = []
+
+            # Getting the titles from all config files
+            config_files, _ = self.config_manager.list_config_files()
+            for config_file in config_files:
+                config = self.config_manager.load_config(config_file)
+                if not config:
+                    continue
+
+                for section in config.sections():
+                    title = config[section].get("search_title", fallback=section)
+                    cleaned_title = clean_window_title(title, sanitize=True)
+                    # Adding title to list
+                    search_titles_list.append(cleaned_title)
+            
+            # Covert the list to set to avoid duplicate titles
+            # Downloading screenshots for all titles
+            for title in set(search_titles_list):
+                filename = title.replace(' ', '_').replace(':', '')
+                image_path = os.path.join(self.assets_dir, f"{filename}.jpg")
 
                 if not os.path.exists(image_path):
-                    download_success = self.asset_manager.search(cleaned_title, save_dir=self.assets_dir)
-                    if not download_success:
-                        try:
-                            print("Download failed, creating dummy image")
-                            shade = 100
-                            image = Image.new('RGB', (1,1), (shade,shade,shade))
-                            image.save(image_path)
-                            break
-                        except Exception as e:
-                            print(f"Failed to create dummy image: {e}")
-                    else:
-                        print(f"Image downloaded to {image_path}")
-        self.on_config_select(self.config)
+                    self.asset_manager.search(title, save_dir=self.assets_dir)
+                    if self.app.image_label.winfo_exists():
+                        self.app.image_label['text'] = f"Downloading image for {title}"
+
+            _, missing_windows = self.window_manager.find_matching_windows(self.config)
+            if not self.compact:
+                self.compute_window_layout(self.config, missing_windows)
+                if self.app.image_label.winfo_exists():
+                    self.app.image_label['text'] = f"Use images: {self.app.use_images}"
+
+    def take_screenshot(self):
+        existing_windows, _ = self.window_manager.find_matching_windows(self.config)
+        if existing_windows:
+            for window in existing_windows:
+                hwnd = window['hwnd']
+                filename = window['config_name'].replace(' ', '_').replace(':', '')
+                image_path = os.path.join(self.assets_dir, f"{filename}.jpg")
+                self.asset_manager.capture_window(hwnd=hwnd, save_path=image_path)
+        
+            self.asset_manager.bring_to_front(hwnd=self.app.root.winfo_id())
 
     def update_always_on_top_status(self):
         try:
@@ -265,9 +301,9 @@ class ApplicationState:
                                                          search_title
                                                          ))
 
-            self.app.set_layout_frame(positioned_windows, self.assets_dir)
+            self.app.set_layout_frame(positioned_windows)
 
-    def update_config_list(self, config=None, retries=3):
+    def update_config_list(self, config=None):
         self.config_files, self.config_names = self.config_manager.list_config_files()
         if self.config_files and self.config_names:
             self.app.combo_box.values = self.config_names
@@ -276,6 +312,13 @@ class ApplicationState:
 
     def save_settings(self):
         self.config_manager.save_settings(self.compact, self.app.use_images)
+
+    def load_managers(self):
+        # Checking if the IGDB client info is added
+        state.check_igdb_client_info()
+        state.window_manager = WindowManager()
+        state.asset_manager = AssetManager(client_id=self.CLIENT_ID, client_secret=self.CLIENT_SECRET, client_info_missing=self.client_info_missing)
+
 
 def load_tk_GUI():
     root = tk.Tk()
@@ -293,12 +336,13 @@ def load_tk_GUI():
         "image_folder": state.open_image_folder,
         "download_images": state.download_screenshots_threaded,
         "toggle_images": state.toggle_images,
+        "screenshot": state.take_screenshot,
     }
-    app = TkGUIManager(root, callbacks=callbacks, compact=state.compact, is_admin=state.is_admin)
+
+    app = TkGUIManager(root, callbacks=callbacks, compact=state.compact, is_admin=state.is_admin, use_images=state.use_images, client_info_missing=state.client_info_missing)
     state.app = app
-    state.app.compact_mode = state.compact
-    state.app.use_images = state.use_images
-    
+    state.app.assets_dir = state.assets_dir
+
     # Set default config
     if state.compact: state.toggle_compact_mode(startup=True)
     default_config = state.config_manager.detect_default_config()
@@ -307,12 +351,9 @@ def load_tk_GUI():
     # Start main GUI
     state.app.root.mainloop()
 
-
-
 if __name__ == "__main__":
     # Get application base path
-    #   Needed to make the application work the same when running
-    #   as script as well as .exe
+    # Needed to make the application work the same when running as script as well as .exe
     if getattr(sys, 'frozen', False):
         base_path = os.path.dirname(sys.executable)
     else:
@@ -320,29 +361,25 @@ if __name__ == "__main__":
 
     # Set up managers
     state = ApplicationState()
-    state.window_manager = WindowManager()
-    state.config_manager = ConfigManager(base_path, state.window_manager)
-    state.asset_manager = AssetManager()
+    state.config_manager = ConfigManager(base_path)
+    threading.Thread(target=state.load_managers, daemon=True).start()
     
     # Set config and asset folders
     state.config_dir = os.path.join(base_path, "configs")
     if not os.path.exists(state.config_dir):
         os.makedirs(state.config_dir)
 
-    # Set assets folder (for images)
     state.assets_dir = os.path.join(base_path, "assets")
     if not os.path.exists(state.assets_dir):
         os.makedirs(state.assets_dir)
-
-    # Load settings
-    settings_file = os.path.join(base_path, "settings.json")
-    state.compact, state.use_images = state.config_manager.load_settings()
 
     # Check for admin rights
     try:
         state.is_admin = windll.shell32.IsUserAnAdmin()
     except:
         state.is_admin = False
+    
+    # Load config
+    state.compact, state.use_images = state.config_manager.load_settings()
 
     load_tk_GUI()
-

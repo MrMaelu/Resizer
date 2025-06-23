@@ -1,19 +1,18 @@
 import os
-from PIL import Image, ImageTk
-import tkinter as tk
-from tkinter import ttk, messagebox
 import pywinstyles
-from ctypes import windll
+import tkinter as tk
 from typing import List
+from ctypes import windll
+from PIL import Image, ImageTk
+from tkinter import ttk, messagebox
 
 # Local imports
+from lib.custom_widgets import CustomDropdown
 from lib.utils import WindowInfo, clean_window_title, choose_color
 from lib.constants import UIConstants, Colors, Messages, WindowStyles, Fonts, Themes
-from lib.custom_widgets import CustomDropdown
-from lib.asset_manager import AssetManager
 
 class TkGUIManager:
-    def __init__(self, root, callbacks=None, compact=False, is_admin=False):
+    def __init__(self, root, callbacks=None, compact=False, is_admin=False, use_images=False, client_info_missing=True):
         self.style = ttk.Style()
         self.available_themes = self.style.theme_names()
         self.theme_list = [
@@ -37,8 +36,9 @@ class TkGUIManager:
         self.pos_y = (self.res_y // 2) - (UIConstants.WINDOW_HEIGHT // 2)
         self.root.geometry(f"{UIConstants.WINDOW_WIDTH}x{UIConstants.WINDOW_HEIGHT}+{self.pos_x}+{self.pos_y}")
 
-        self.compact_mode = compact or False
+        self.compact_mode = compact
         self.is_admin = is_admin
+        self.client_info_missing = client_info_missing
 
         self.default_font = Fonts.TEXT_NORMAL
         self.canvas = None
@@ -58,15 +58,14 @@ class TkGUIManager:
         self.image_folder = None
         self.download_images = None
         self.toggle_images = None
+        self.screenshot = None
 
         self.on_config_select = None
         self.on_mode_toggle = None
         
         self.layout_frame_create_config = None
-        self.image_cache = {}
-        self.asset_manager = AssetManager()
-        self.use_images = False
-        self.failed_downloads = []
+        self.use_images = use_images
+        self.assets_dir = None
 
         self.setup_styles()
         self.create_layout()
@@ -244,12 +243,12 @@ class TkGUIManager:
         aot_container.pack(side=tk.TOP, fill=tk.X, pady=(UIConstants.MARGIN[2], 0))
 
         # AOT status label
-        aot_label_frame = ttk.Frame(aot_container, padding=UIConstants.MARGIN)
-        aot_label_frame.configure(style="TFrame")
-        aot_label_frame.pack(side=tk.TOP, fill=tk.X, pady=(0, UIConstants.MARGIN[2]))
-        self.aot_label = ttk.Label(aot_label_frame, text=Messages.ALWAYS_ON_TOP_DISABLED)
+        self.aot_label_frame = ttk.Frame(aot_container, padding=UIConstants.MARGIN)
+        self.aot_label_frame.configure(style="TFrame")
+        self.aot_label_frame.pack(side=tk.TOP, fill=tk.X, pady=(0, UIConstants.MARGIN[2]))
+        self.aot_label = ttk.Label(self.aot_label_frame, text=Messages.ALWAYS_ON_TOP_DISABLED)
         self.aot_label.configure(style='TLabel')
-        self.aot_label.pack(side=tk.TOP, anchor=tk.W)
+        self.aot_label.pack(side=tk.LEFT, anchor=tk.W)
 
         # AOT toggle button
         self.aot_button_frame = ttk.Frame(aot_container, padding=UIConstants.MARGIN)
@@ -261,24 +260,41 @@ class TkGUIManager:
 
     def manage_image_buttons(self, destroy=False):
         if destroy:
+            self.image_label.destroy()
             self.image_button.destroy()
             self.image_download_button.destroy()
             self.image_folder_button.destroy()
+            self.take_screenshot_button.destroy()
         else:
+            # Screenshot button
+            self.take_screenshot_button = ttk.Button(self.aot_button_frame, text="Take screenshots", width=20,
+                                                    command=self.callbacks.get("screenshot") or self.screenshot)
+            self.take_screenshot_button.pack(side=tk.LEFT, anchor=tk.W, padx=2)
+
+            # Images label
+            self.image_label = ttk.Label(self.aot_label_frame, text=f"Use images: {self.use_images}")
+            self.image_label.configure(style='TLabel')
+            self.image_label.pack(side=tk.RIGHT, anchor=tk.W)
+
             # Image toggle button
             self.image_button = ttk.Button(self.aot_button_frame, text="Toggle images", width=20,
                                     command=self.callbacks.get("toggle_images") or self.toggle_images)
-            self.image_button.pack(side=tk.RIGHT, anchor=tk.W)
+            self.image_button.pack(side=tk.RIGHT, anchor=tk.W, padx=2)
             
             # Image download button
-            self.image_download_button = ttk.Button(self.aot_button_frame, text="Download images", width=20,
-                                    command=self.callbacks.get("download_images") or self.download_images)
-            self.image_download_button.pack(side=tk.RIGHT, anchor=tk.W)
+            self.image_download_button = ttk.Button(self.aot_button_frame,
+                                                    text="Download images",
+                                                    width=20,
+                                                    command=self.callbacks.get("download_images") or self.download_images,
+                                                    state=tk.DISABLED if self.client_info_missing else tk.NORMAL,
+                                                    style='Disabled.TButton' if self.client_info_missing else 'TButton',
+                                                    )
+            self.image_download_button.pack(side=tk.RIGHT, anchor=tk.W, padx=2)
 
             # Image folder button
             self.image_folder_button = ttk.Button(self.aot_button_frame, text="Open image folder", width=20,
                                     command=self.callbacks.get("image_folder") or self.image_folder)
-            self.image_folder_button.pack(side=tk.RIGHT, anchor=tk.W)
+            self.image_folder_button.pack(side=tk.RIGHT, anchor=tk.W, padx=2)
 
     def setup_managed_text(self):
         # Create managed windows frame if not exists
@@ -323,13 +339,13 @@ class TkGUIManager:
             self.managed_text = None
         self.managed_frame.pack_forget()
     
-    def set_layout_frame(self, windows, assets_dir):
+    def set_layout_frame(self, windows):
         # Clear old frame
         if self.layout_frame:
             self.layout_frame.destroy()
 
         # Create and pack new layout frame
-        self.layout_frame = ScreenLayoutFrame(self.layout_container, self.res_x, self.res_y, windows, self.theme, self.image_cache, asset_manager=self.asset_manager, assets_dir=assets_dir, use_images=self.use_images, failed_downloads=self.failed_downloads)
+        self.layout_frame = ScreenLayoutFrame(self.layout_container, self.res_x, self.res_y, windows, self.theme, assets_dir=self.assets_dir, use_images=self.use_images)
         self.layout_frame.pack(fill=tk.BOTH, expand=True)
 
     def scale_gui(self):
@@ -518,7 +534,6 @@ class TkGUIManager:
                     return default
 
             def update_layout_frame():
-                assets_dir = ''
                 windows = []
                 try:
                     for title, vars_ in settings_vars.items():
@@ -544,10 +559,7 @@ class TkGUIManager:
                                                                 self.root.winfo_screenheight(),
                                                                 windows,
                                                                 self.theme,
-                                                                self.image_cache,
-                                                                self.asset_manager,
-                                                                assets_dir,
-                                                                self.failed_downloads
+                                                                self.assets_dir,
                                                                 )
                     self.layout_frame_create_config.pack(expand=True, fill='both')
                 except Exception as e:
@@ -650,16 +662,13 @@ class TkGUIManager:
 
 
 class ScreenLayoutFrame(ttk.Frame):
-    def __init__(self, parent, screen_width, screen_height, windows: List[WindowInfo], theme, image_cache, asset_manager, assets_dir, failed_downloads, use_images=False):
+    def __init__(self, parent, screen_width, screen_height, windows: List[WindowInfo], theme, assets_dir, use_images=False):
         super().__init__(parent)
         self.windows = windows
         self.update_colors(theme)
         
-        self.asset_manager = asset_manager
         self.assets_dir = assets_dir
-        self.image_cache = image_cache
         self.use_images = use_images
-        self.failed_downloads = failed_downloads
 
         self.canvas = tk.Canvas(self, bg=choose_color(Colors.BACKGROUND, Themes.APPROVED_DARK_THEMES, theme), highlightthickness=0)
         self.canvas.pack(fill=tk.BOTH, expand=True)
@@ -790,7 +799,9 @@ class ScreenLayoutFrame(ttk.Frame):
                             image = Image.open(image_path)
                             image = image.resize((int(w), int(h)), Image.LANCZOS)
                             tk_image = ImageTk.PhotoImage(image)
-                            self.image_cache[image_path] = (image, tk_image)
+                            if not hasattr(self, 'tk_images'):
+                                self.tk_images = {}
+                            self.tk_images[win.search_title] = tk_image
                             self.canvas.create_image(x, y, image=tk_image, anchor=tk.NW)
                             break
                         except Exception as e:

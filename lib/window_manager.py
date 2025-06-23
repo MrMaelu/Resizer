@@ -191,7 +191,6 @@ class WindowManager:
             # Apply settings
             # Check if the config is a dictionary and attempt to apply
             if isinstance(config, dict):
-                print(f"Applying config from dictionary")
                 # Remove titlebar if set
                 if 'has_titlebar' in config:
                     if not config['has_titlebar']:
@@ -221,7 +220,6 @@ class WindowManager:
 
             # Handle ConfigParser config
             elif hasattr(config, 'sections'):
-                print(f"Applying config as configparser")
                 window_title = self.get_window_title(hwnd)
                 for section in config.sections():
                     if self._match_window_title(section, window_title):

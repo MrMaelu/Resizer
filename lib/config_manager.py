@@ -10,11 +10,10 @@ import pygetwindow as gw
 from lib.utils import clean_window_title
 
 class ConfigManager:
-    def __init__(self, base_path, window_manager=None):
+    def __init__(self, base_path):
         self.base_path = base_path
         self.config_dir = os.path.join(base_path, "configs")
         self.settings_file = os.path.join(base_path, "settings.json")
-        self.window_manager = window_manager
         
         # Create config directory if it doesn't exist
         if not os.path.exists(self.config_dir):
