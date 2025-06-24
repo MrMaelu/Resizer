@@ -3,6 +3,7 @@ import pywinstyles
 import tkinter as tk
 from typing import List
 from ctypes import windll
+from fractions import Fraction
 from PIL import Image, ImageTk
 from tkinter import ttk, messagebox
 
@@ -46,6 +47,8 @@ class TkGUIManager:
         self.managed_label = None
         self.managed_text = None
 
+        self.ratio_label = None
+
         self.callbacks = callbacks or {}
 
         self.apply_config = None
@@ -66,6 +69,8 @@ class TkGUIManager:
         self.layout_frame_create_config = None
         self.use_images = use_images
         self.assets_dir = None
+
+        self.layout_number = 1
 
         self.setup_styles()
         self.create_layout()
@@ -164,20 +169,21 @@ class TkGUIManager:
         self.managed_frame.pack_forget()  # Hide it initially
 
         # Screen resolution label
-        self.resolution_label = ttk.Label(header_frame, text=f"Screen: {self.res_x} x {self.res_y}", padding=(0, 0, 5, 0))
+        self.resolution_label = ttk.Label(header_frame, text=f"{self.res_x} x {self.res_y}", padding=(0, 0, 5, 0))
         self.resolution_label.configure(style='TLabel')
         self.resolution_label.pack(side=tk.LEFT, fill=tk.X)
 
         # User / Admin mode label
         app_mode = "Admin" if self.is_admin else "User"
-        self.admin_label = ttk.Label(header_frame, text=f"Mode: {app_mode}", padding=(0, 0, 5, 0))
+        self.admin_label = ttk.Label(header_frame, text=f"{app_mode} mode", padding=(0, 0, 5, 0))
         self.admin_label.configure(style='Admin.TLabel' if self.is_admin else 'TLabel')
         self.admin_label.pack(side=tk.RIGHT, fill=tk.X)
         
+        # Config selection menu
         combo_frame = header_frame = ttk.Frame(self.main_frame, padding=UIConstants.MARGIN)
         combo_frame.configure(style="TFrame")
         combo_frame.pack(side=tk.TOP, fill=tk.X)
-        self.combo_box = CustomDropdown(combo_frame, values=[], command=self.callbacks.get("config_selected", self.on_config_select))
+        self.combo_box = CustomDropdown(combo_frame, values=[], command=self.callbacks.get("config_selected", self.on_config_select), width=40)
         self.combo_box.pack(side=tk.LEFT, pady=UIConstants.MARGIN[2])
         self.combo_box.set_theme(self.theme)
 
@@ -413,7 +419,7 @@ class TkGUIManager:
 
     def create_config_ui(self, parent, window_titles, save_callback, settings_callback, refresh_callback):
         parent.attributes('-disabled', True)
-        entry_font = ('Consolas 12')
+        entry_font = ('Consolas 10')
 
         def on_close():
             parent.attributes('-disabled', False)
@@ -512,15 +518,16 @@ class TkGUIManager:
                 textvariable=config_name_var,
                 bg=self.background,
                 fg=self.text_normal,
-                insertbackground=self.text_normal
-                ).grid(row=row, column=2, columnspan=2, pady=pady, sticky='ew')
+                insertbackground=self.text_normal,
+                font=entry_font,
+                ).grid(row=row, column=2, columnspan=3, pady=pady, sticky='ew')
 
             self.apply_titlebar_style()
 
             # Layout frame placeholder
             layout_container_create_config = ttk.Frame(settings_frame, padding=UIConstants.MARGIN)
             layout_container_create_config.configure(style="TFrame")
-            layout_container_create_config.grid(row=row+2, column=0, columnspan=7, sticky='nsew')
+            layout_container_create_config.grid(row=row+3, column=0, columnspan=7, sticky='nsew')
             settings_frame.rowconfigure(row+2, weight=10)
             for col in range(7):
                 settings_frame.columnconfigure(col, weight=1)
@@ -566,14 +573,112 @@ class TkGUIManager:
                     print(f"Failed to draw layout: {e}")
 
             def auto_position():
-                for num, title in enumerate(sorted_windows):
-                    vars = settings_vars[title]
-                    size_w = self.root.winfo_screenwidth() / len(sorted_windows)
-                    size_h = self.root.winfo_screenheight() if vars[2].get() else self.root.winfo_screenheight() - UIConstants.TASKBAR_HEIGHT
-                    pos_x = size_w * num
-                    settings_vars[title][0].set(f'{int(pos_x)},0')
-                    settings_vars[title][1].set(f'{int(size_w)},{int(size_h)}')
+                screen_width = self.root.winfo_screenwidth()
+                screen_height = self.root.winfo_screenheight()
+                taskbar_height = UIConstants.TASKBAR_HEIGHT
+                usable_height = screen_height - taskbar_height
+
+                layout_configs = {
+                    1: (16, 9, Fraction(1, 2)),
+                    2: (16, 9, Fraction(4, 6)),
+                    3: (21, 9, Fraction(1, 2)),
+                    4: (21, 9, Fraction(3, 5)),
+                    5: (4, 3, Fraction(1, 2)),
+                    6: (4, 3, Fraction(2, 3)),
+                    7: (4, 3, Fraction(3, 5)),
+                }
+
+                layout_max = len(layout_configs)
+
+                if len(sorted_windows) == 3 and self.layout_number in layout_configs:
+                    numerator, denominator, weight_1 = layout_configs[self.layout_number]
+                    if not (0 <= weight_1 <= 1):
+                        print(f"Invalid weight_1: {weight_1}. Resetting to 1/2.")
+                        weight_1 = Fraction(1, 2)
+                    weight_2 = 1 - weight_1
+                    ratio = Fraction(numerator, denominator)
+
+                    aux_width = screen_width - (screen_height * ratio)
+                    left_width = aux_width * weight_1
+                    center_width = screen_height * ratio
+                    right_width = aux_width * weight_2
+
+                    positions = [
+                        (0, 0, left_width, usable_height),
+                        (left_width, 0, center_width, screen_height),
+                        (left_width + center_width, 0, right_width, usable_height)
+                    ]
+
+                    for (x, y, w, h), title in zip(positions, sorted_windows):
+                        settings_vars[title][0].set(f'{int(x)},{int(y)}')
+                        settings_vars[title][1].set(f'{int(w)},{int(h)}')
+                    
+                    settings_vars[sorted_windows[1]][2].set(True)  # Set middle window AOT
+                    settings_vars[sorted_windows[1]][3].set(False)  # Set middle window titlebar off
+                    
+                    # Set name
+                    config_name_var.set(f"{settings_vars[sorted_windows[1]][4].get()} ({numerator}-{denominator})(L_{weight_1.numerator}-{weight_1.denominator})(R_{weight_2.numerator}-{weight_2.denominator})")
+                elif len(sorted_windows) == 2:
+                    dual_layouts = {
+                        1: (16, 'R'),
+                        2: (21, 'R'),
+                        3: (16, 'L'),
+                        4: (21, 'L'),
+                    }
+                    layout_max = len(dual_layouts)
+                    numerator, side = dual_layouts[self.layout_number]
+                    ratio = Fraction(numerator, 9)
+                    if side == 'R':
+                        right_width = screen_height * ratio
+                        left_width = screen_width - right_width
+                        right_height = screen_height
+                        left_height = usable_height
+                        aot = 1
+                    elif side == 'L':
+                        left_width = screen_height * ratio
+                        right_width = screen_width - left_width
+                        left_height = screen_height
+                        right_height = usable_height
+                        aot = 0
+                    
+                    # Left
+                    settings_vars[sorted_windows[0]][0].set(f'0,0')
+                    settings_vars[sorted_windows[0]][1].set(f'{int(left_width)},{int(left_height)}')
+                    
+                    # Right
+                    settings_vars[sorted_windows[1]][0].set(f'{left_width},0')
+                    settings_vars[sorted_windows[1]][1].set(f'{int(right_width)},{int(right_height)}')
+
+                    # Set AOT and titlebar
+                    settings_vars[sorted_windows[aot]][2].set(True)
+                    settings_vars[sorted_windows[aot]][3].set(False)
+                    settings_vars[sorted_windows[not aot]][2].set(False)
+                    settings_vars[sorted_windows[not aot]][3].set(True)
+                    
+                    # Set name
+                    config_name_var.set(f"{settings_vars[sorted_windows[1]][4].get()} {side}_{numerator}-9")
+                else:
+                    window_width = screen_width / len(sorted_windows)
+                    for i, title in enumerate(sorted_windows):
+                        settings_vars[title][0].set(f'{int(window_width * i)},0')
+                        settings_vars[title][1].set(f'{int(window_width)},{int(usable_height)}')
+                        settings_vars[title][2].set(False)
+
+                self.layout_number = 1 if self.layout_number >= layout_max else self.layout_number + 1
+                if len(sorted_windows) == 3 and self.layout_number in layout_configs:
+                    self.ratio_label['text'] = (
+                        f"{numerator}/{denominator} "
+                        f"L:{weight_1.numerator}/{weight_1.denominator} "
+                        f"R:{weight_2.numerator}/{weight_2.denominator}"
+                    )
+                elif len(sorted_windows) == 2:
+                    self.ratio_label['text'] = (
+                        f"{side}: {numerator}/9"
+                    )
+                else:
+                    self.ratio_label['text'] = ("Evenly spaced")
                 update_layout_frame()
+                
 
             def on_save():
                 config_data = {}
@@ -586,7 +691,7 @@ class TkGUIManager:
                         'titlebar': titlebar.get(),
                         'name': name_var.get().strip()
                     }
-                name = clean_window_title(config_name_var.get())
+                name = clean_window_title(config_name_var.get(), titlecase=True)
                 if not name:
                     messagebox.showerror("Error", "Config name is required")
                     return
@@ -597,8 +702,10 @@ class TkGUIManager:
 
             update_layout_frame()
             ttk.Button(settings_frame, text="Auto align", command=auto_position, width=15).grid(row=row, column=0, pady=pady, sticky='w')
-            ttk.Button(settings_frame, text="Update drawing", command=update_layout_frame, width=15).grid(row=row+1, column=0, pady=pady, sticky='w')
-            ttk.Button(settings_frame, text="Save Config", command=on_save, width=30).grid(row=row, column=4, columnspan=2, pady=pady)
+            self.ratio_label = ttk.Label(settings_frame, text="", font=entry_font)
+            self.ratio_label.grid(row=row+1, column=0, pady=pady, sticky='w')
+            ttk.Button(settings_frame, text="Update drawing", command=update_layout_frame, width=15).grid(row=row+2, column=0, pady=pady, sticky='w')
+            ttk.Button(settings_frame, text="Save Config", command=on_save, width=40).grid(row=row+1, column=2, columnspan=3, pady=pady)
 
             config_win.geometry(f"{UIConstants.WINDOW_WIDTH+200}x{UIConstants.WINDOW_HEIGHT+100}")
 
@@ -631,10 +738,12 @@ class TkGUIManager:
 
         switches = {}
         for title in window_titles:
+            clean_title = clean_window_title(title=title, sanitize=True)
             var = tk.BooleanVar()
+
             cb = tk.Checkbutton(
                 selection_frame,
-                text=title,
+                text=clean_title,
                 variable=var,
                 bg=self.background,
                 fg=self.text_normal,
@@ -651,6 +760,7 @@ class TkGUIManager:
             switches[title] = var
 
         ttk.Button(selection_frame, text="Confirm Selection", command=confirm_selection, width=45).pack(pady=10)
+
 
 
 

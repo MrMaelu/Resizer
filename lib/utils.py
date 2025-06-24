@@ -12,7 +12,7 @@ class WindowInfo:
     exists: bool
     search_title: str
 
-def clean_window_title(title, sanitize=False):
+def clean_window_title(title, sanitize=False, titlecase=True):
     if not title:
         return ""
     
@@ -25,11 +25,14 @@ def clean_window_title(title, sanitize=False):
         # Additional cleaning for config files
         parts = re.split(r' [-—–] ', title)
         title = parts[-1].strip()
-        title = re.sub(r'\s*\(.*\)$', '', title)
+        #title = re.sub(r'\s*\(.*\)$', '', title)
         title = re.sub(r'\s+\d+%$', '', title)
         title = re.sub(r'[<>:"/\\|?*\[\]]', '', title)
     
-    return title.title()
+    if titlecase:
+        return title.title()
+    else:
+        return title
 
 def invert_hex_color(hex_color):
     # Remove '#' if present

@@ -212,7 +212,7 @@ class ApplicationState:
 
     def download_screenshots(self):
             # List to hold all titles
-            search_titles_list = []
+            search_titles = set()
 
             # Getting the titles from all config files
             config_files, _ = self.config_manager.list_config_files()
@@ -225,11 +225,10 @@ class ApplicationState:
                     title = config[section].get("search_title", fallback=section)
                     cleaned_title = clean_window_title(title, sanitize=True)
                     # Adding title to list
-                    search_titles_list.append(cleaned_title)
+                    search_titles.add(cleaned_title)
             
-            # Covert the list to set to avoid duplicate titles
             # Downloading screenshots for all titles
-            for title in set(search_titles_list):
+            for title in search_titles:
                 filename = title.replace(' ', '_').replace(':', '')
                 image_path = os.path.join(self.assets_dir, f"{filename}.jpg")
 
@@ -309,6 +308,12 @@ class ApplicationState:
             self.app.combo_box.values = self.config_names
             self.app.combo_box.var.set(config or self.config_names[0])
             self.on_config_select(config or self.config_manager.detect_default_config())
+        else:
+            self.app.combo_box.values = []
+            self.app.combo_box.var.set('')
+            if self.app.layout_frame:
+                self.app.layout_frame.destroy()
+
 
     def save_settings(self):
         self.config_manager.save_settings(self.compact, self.app.use_images)

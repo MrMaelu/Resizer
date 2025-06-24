@@ -325,6 +325,7 @@ class WindowManager:
     def _is_system_window(self, title):
         # Check if window is a system window that should be excluded
         system_windows = [
+            "Window Manager",
             "Program Manager",
             "Windows Input Experience",
             "Microsoft Text Input Application",

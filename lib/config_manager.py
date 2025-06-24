@@ -93,7 +93,7 @@ class ConfigManager:
                 print("No config name provided")
                 return False
 
-            config_name = clean_window_title(config_name, sanitize=True)
+            config_name = clean_window_title(config_name, sanitize=True, titlecase=True)
             print(f"Saving config '{config_name}' with {len(window_data)} windows")
 
             config = configparser.ConfigParser()
