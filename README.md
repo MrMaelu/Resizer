@@ -117,7 +117,6 @@ titlebar = true
 ```
 
 ## Notes:
-- Windows without position/size in config will be auto-arranged based on screen size.
 - Window titles in config are matched partially and case-insensitively against open windows.
 
 #### This application is made with ultrawide monitors in mind (32:9 / 21:9) and will work best on a single monitor setup
