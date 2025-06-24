@@ -16,16 +16,16 @@
 - Compact GUI mode available
 
 ## Main window
-<img src="https://i.ibb.co/V09RHGqq/Skjermbilde-2025-06-22-214207.png" alt="Main window">
+<img src="https://i.ibb.co/PX7pNg7/Skjermbilde-2025-06-24-222015.png" alt="Main window">
 
 ## Main window screenshot mode
-<img src="https://i.ibb.co/BHWZYY8X/Skjermbilde-2025-06-22-214316.png" alt="Main window screenshot mode">
+<img src="https://i.ibb.co/yBYNGPj0/Skjermbilde-2025-06-24-222054.png" alt="Main window screenshot mode">
 
 ## Main window compact mode
-<img src="https://i.ibb.co/vxBsQKTB/Skjermbilde-2025-06-22-214305.png" alt="Compact mode">
+<img src="https://i.ibb.co/S4C17W71/Skjermbilde-2025-06-24-222105.png" alt="Compact mode">
 
 ## Config window
-<img src="https://i.ibb.co/w3QN8Yr/Skjermbilde-2025-06-22-214254.png" alt="Create config">
+<img src="https://i.ibb.co/n8QPQ8cB/Skjermbilde-2025-06-24-222144.png" alt="Create config">
 
 
 ## Usage:
