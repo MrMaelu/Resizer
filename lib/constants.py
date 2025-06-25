@@ -1,3 +1,72 @@
+class LayoutDefaults:
+    # Format: (aspect_ratio_w, aspect_ratio_h, alignment) for 1 window
+    ONE_WINDOW = [
+        (21, 9, 'L'),
+        (21, 9, 'L'),
+        (16, 9, 'L'),
+        (4, 3, 'L'),
+        (32, 9, 'R'),
+        (21, 9, 'R'),
+        (16, 9, 'R'),
+        (4, 3, 'R'),
+        (32, 9, 'C'),
+        (21, 9, 'C'),
+        (16, 9, 'C'),
+        (4, 3, 'C'),
+    ]
+
+    # Format: (aspect_ratio_w, alignment) for 2 windows
+    TWO_WINDOWS = [
+        (16, 'R'),
+        (21, 'R'),
+        (16, 'L'),
+        (21, 'L'),
+        (16, 'CL'),
+        (21, 'CL'),
+        (16, 'CR'),
+        (21, 'CR'),
+    ]
+
+    # Format: (aspect_ratio_w, aspect_ratio_h, left_weight) for 3 windows
+    THREE_WINDOWS = [
+        (21, 9, '1/2'),
+        (16, 9, '1/2'),
+        (4, 3, '1/2'),
+        (21, 9, '2/3'),
+        (16, 9, '2/3'),
+        (4, 3, '2/3'),
+        (21, 9, '3/5'),
+        (16, 9, '3/5'),
+        (4, 3, '3/5'),
+        (21, 9, '2/5'),
+        (16, 9, '2/5'),
+        (4, 3, '2/5'),
+    ]
+
+    FOUR_WINDOWS = [
+        # layout 0: four equal horizontal windows
+        [((0, 0), (1/4, 1)), ((1/4, 0), (1/4, 1)), ((1/2, 0), (1/4, 1)), ((3/4, 0), (1/4, 1))],
+        
+        # layout 1: 1 & 2 stacked left half, 3 & 4 side-by-side on right half
+        [((0, 0), (1/2, 1/2)), ((0, 1/2), (1/2, 1/2)), ((1/2, 0), (1/4, 1)), ((3/4, 0), (1/4, 1))],
+
+        # layout 2: 1 & 2 side-by-side left half, 3 & 4 stacked right half
+        [((0, 0), (1/4, 1)), ((1/4, 0), (1/4, 1)), ((1/2, 0), (1/2, 1/2)), ((1/2, 1/2), (1/2, 1/2))],
+
+        # layout 3: four equally sized 2x2 grid
+        [((0, 0), (1/2, 1/2)), ((1/2, 0), (1/2, 1/2)), ((0, 1/2), (1/2, 1/2)), ((1/2, 1/2), (1/2, 1/2))],
+    ]
+
+
+    # Unified dictionary for simplified access
+    DEFAULT_LAYOUTS = {
+        1: ONE_WINDOW,
+        2: TWO_WINDOWS,
+        3: THREE_WINDOWS,
+        4: FOUR_WINDOWS,
+    }
+
+
 class UIConstants:
     # Window dimensions
     WINDOW_WIDTH = 850

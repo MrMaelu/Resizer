@@ -11,6 +11,7 @@ from tkinter import ttk, messagebox
 from lib.custom_widgets import CustomDropdown
 from lib.utils import WindowInfo, clean_window_title, choose_color
 from lib.constants import UIConstants, Colors, Messages, WindowStyles, Fonts, Themes
+from lib.config_manager import ConfigManager
 
 class TkGUIManager:
     def __init__(self, root, callbacks=None, compact=False, is_admin=False, use_images=False, client_info_missing=True):
@@ -70,7 +71,9 @@ class TkGUIManager:
         self.use_images = use_images
         self.assets_dir = None
 
-        self.layout_number = 1
+        self.auto_align_layouts = ConfigManager.load_or_create_layouts()
+
+        self.layout_number = 0
 
         self.setup_styles()
         self.create_layout()
@@ -578,20 +581,29 @@ class TkGUIManager:
                 taskbar_height = UIConstants.TASKBAR_HEIGHT
                 usable_height = screen_height - taskbar_height
 
-                layout_configs = {
-                    1: (16, 9, Fraction(1, 2)),
-                    2: (16, 9, Fraction(4, 6)),
-                    3: (21, 9, Fraction(1, 2)),
-                    4: (21, 9, Fraction(3, 5)),
-                    5: (4, 3, Fraction(1, 2)),
-                    6: (4, 3, Fraction(2, 3)),
-                    7: (4, 3, Fraction(3, 5)),
-                }
+                layout_configs = self.auto_align_layouts[len(sorted_windows)]
+                layout_max = len(layout_configs) - 1
 
-                layout_max = len(layout_configs)
+                # 4 windows
+                if len(sorted_windows) == 4:
+                    layout = layout_configs[self.layout_number]
 
-                if len(sorted_windows) == 3 and self.layout_number in layout_configs:
+                    for i, ((rel_x, rel_y), (rel_w, rel_h)) in enumerate(layout):
+                        x = int(rel_x * screen_width)
+                        y = int(rel_y * usable_height)
+                        width = int(rel_w * screen_width)
+                        height = int(rel_h * usable_height)
+
+                        settings_vars[sorted_windows[i]][0].set(f"{x},{y}")
+                        settings_vars[sorted_windows[i]][1].set(f"{width},{height}")
+
+                    # Set name
+                    config_name_var.set(f"{settings_vars[sorted_windows[1]][4].get()} grid {self.layout_number + 1}")
+
+                # 3 windows
+                elif len(sorted_windows) == 3:
                     numerator, denominator, weight_1 = layout_configs[self.layout_number]
+                    weight_1 = Fraction(weight_1)
                     if not (0 <= weight_1 <= 1):
                         print(f"Invalid weight_1: {weight_1}. Resetting to 1/2.")
                         weight_1 = Fraction(1, 2)
@@ -618,45 +630,55 @@ class TkGUIManager:
                     
                     # Set name
                     config_name_var.set(f"{settings_vars[sorted_windows[1]][4].get()} ({numerator}-{denominator})(L_{weight_1.numerator}-{weight_1.denominator})(R_{weight_2.numerator}-{weight_2.denominator})")
+
+                # 2 windows
                 elif len(sorted_windows) == 2:
-                    dual_layouts = {
-                        1: (16, 'R'),
-                        2: (21, 'R'),
-                        3: (16, 'L'),
-                        4: (21, 'L'),
-                    }
-                    layout_max = len(dual_layouts)
-                    numerator, side = dual_layouts[self.layout_number]
+                    numerator, side = layout_configs[self.layout_number]
                     ratio = Fraction(numerator, 9)
+
+                    left_x = 0
+                    aot = 1 if side in ('R', 'CL') else 0
+
                     if side == 'R':
                         right_width = screen_height * ratio
                         left_width = screen_width - right_width
-                        right_height = screen_height
-                        left_height = usable_height
-                        aot = 1
                     elif side == 'L':
                         left_width = screen_height * ratio
                         right_width = screen_width - left_width
-                        left_height = screen_height
-                        right_height = usable_height
-                        aot = 0
-                    
-                    # Left
-                    settings_vars[sorted_windows[0]][0].set(f'0,0')
+                    elif side == 'CL':
+                        right_width = screen_height * ratio
+                        left_width = (screen_width / 2) - (right_width / 2)
+                    elif side == 'CR':
+                        left_width = screen_height * ratio
+                        right_width = (screen_width / 2) - (left_width / 2)
+                        left_x = right_width
+                    else:
+                        print("Invalid position value")
+                        left_width = right_width = 0
+
+                    # Heights
+                    left_height = right_height = screen_height if side in ('R', 'L') else usable_height
+                    if side == 'CL': right_height = screen_height
+                    if side == 'CR': left_height = screen_height
+
+                    # Positions
+                    right_x = left_x + left_width if side == 'CR' else left_width
+
+                    # Apply settings
+                    settings_vars[sorted_windows[0]][0].set(f'{int(left_x)},0')
                     settings_vars[sorted_windows[0]][1].set(f'{int(left_width)},{int(left_height)}')
-                    
-                    # Right
-                    settings_vars[sorted_windows[1]][0].set(f'{left_width},0')
+
+                    settings_vars[sorted_windows[1]][0].set(f'{int(right_x)},0')
                     settings_vars[sorted_windows[1]][1].set(f'{int(right_width)},{int(right_height)}')
 
-                    # Set AOT and titlebar
+                    # AOT and titlebar
                     settings_vars[sorted_windows[aot]][2].set(True)
                     settings_vars[sorted_windows[aot]][3].set(False)
                     settings_vars[sorted_windows[not aot]][2].set(False)
                     settings_vars[sorted_windows[not aot]][3].set(True)
-                    
+
                     # Set name
-                    config_name_var.set(f"{settings_vars[sorted_windows[1]][4].get()} {side}_{numerator}-9")
+                    config_name_var.set(f"{settings_vars[sorted_windows[aot]][4].get()} {side}_{numerator}-9")
                 else:
                     window_width = screen_width / len(sorted_windows)
                     for i, title in enumerate(sorted_windows):
@@ -664,19 +686,28 @@ class TkGUIManager:
                         settings_vars[title][1].set(f'{int(window_width)},{int(usable_height)}')
                         settings_vars[title][2].set(False)
 
-                self.layout_number = 1 if self.layout_number >= layout_max else self.layout_number + 1
-                if len(sorted_windows) == 3 and self.layout_number in layout_configs:
+                preset_label_text = f"Preset {self.layout_number + 1}/{layout_max + 1}\n\n"
+
+                if len(sorted_windows) == 4:
                     self.ratio_label['text'] = (
+                        f"{preset_label_text} "
+                    )
+                elif len(sorted_windows) == 3:
+                    self.ratio_label['text'] = (
+                        f"{preset_label_text}"
                         f"{numerator}/{denominator} "
                         f"L:{weight_1.numerator}/{weight_1.denominator} "
                         f"R:{weight_2.numerator}/{weight_2.denominator}"
                     )
                 elif len(sorted_windows) == 2:
                     self.ratio_label['text'] = (
+                        f"{preset_label_text}"
                         f"{side}: {numerator}/9"
                     )
                 else:
-                    self.ratio_label['text'] = ("Evenly spaced")
+                    self.ratio_label['text'] = ("def")
+                
+                self.layout_number = 0 if self.layout_number >= layout_max else self.layout_number + 1
                 update_layout_frame()
                 
 
@@ -704,7 +735,7 @@ class TkGUIManager:
             ttk.Button(settings_frame, text="Auto align", command=auto_position, width=15).grid(row=row, column=0, pady=pady, sticky='w')
             self.ratio_label = ttk.Label(settings_frame, text="", font=entry_font)
             self.ratio_label.grid(row=row+1, column=0, pady=pady, sticky='w')
-            ttk.Button(settings_frame, text="Update drawing", command=update_layout_frame, width=15).grid(row=row+2, column=0, pady=pady, sticky='w')
+            ttk.Button(settings_frame, text="Update drawing", command=update_layout_frame, width=15).grid(row=row, column=6, pady=pady, sticky='w')
             ttk.Button(settings_frame, text="Save Config", command=on_save, width=40).grid(row=row+1, column=2, columnspan=3, pady=pady)
 
             config_win.geometry(f"{UIConstants.WINDOW_WIDTH+200}x{UIConstants.WINDOW_HEIGHT+100}")

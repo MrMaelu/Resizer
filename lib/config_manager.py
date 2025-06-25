@@ -1,5 +1,6 @@
 import re
 import os
+import ast
 import json
 import win32gui
 import win32con
@@ -8,18 +9,60 @@ import pygetwindow as gw
 
 # Local imports
 from lib.utils import clean_window_title
+from lib.constants import LayoutDefaults
 
 class ConfigManager:
+    LAYOUT_CONFIG_FILE = "layout_config.ini"
+    SECTION = "Layouts"
+    
     def __init__(self, base_path):
         self.base_path = base_path
         self.config_dir = os.path.join(base_path, "configs")
         self.settings_file = os.path.join(base_path, "settings.json")
-        
+
         # Create config directory if it doesn't exist
         if not os.path.exists(self.config_dir):
             os.makedirs(self.config_dir)
             print(f"Created config directory: {self.config_dir}")
+
+    @staticmethod
+    def serialize(layouts: dict) -> configparser.ConfigParser:
+        config = configparser.ConfigParser()
+        config[ConfigManager.SECTION] = {}
+
+        for key, entries in layouts.items():
+            config[ConfigManager.SECTION][str(key)] = repr(entries)
+        return config
+
+    @staticmethod
+    def deserialize(config: configparser.ConfigParser) -> dict:
+        layouts = {}
+        if ConfigManager.SECTION not in config:
+            return LayoutDefaults.DEFAULT_LAYOUTS
+
+        for key in config[ConfigManager.SECTION]:
+            try:
+                layouts[int(key)] = ast.literal_eval(config[ConfigManager.SECTION][key])
+            except Exception:
+                continue  # Skip invalid entries
+        return layouts
+
+    @staticmethod
+    def load_or_create_layouts(path=None) -> dict:
+        path = path or ConfigManager.LAYOUT_CONFIG_FILE
+
+        if os.path.exists(path):
+            config = configparser.ConfigParser()
+            config.read(path)
+            return ConfigManager.deserialize(config)
+
+        # Create new config file with defaults
+        config = ConfigManager.serialize(LayoutDefaults.DEFAULT_LAYOUTS)
+        with open(path, 'w') as f:
+            config.write(f)
+        return LayoutDefaults.DEFAULT_LAYOUTS
     
+
     def list_config_files(self):
         # List all configuration files and their names
         config_files = [f for f in os.listdir(self.config_dir) 
