@@ -176,6 +176,7 @@ class ApplicationState:
     def toggle_images(self):
         self.app.use_images = not self.app.use_images
         self.app.image_label['text'] = f"Use images: {self.app.use_images}"
+        self.app.image_label.configure(style='TLabel' if not self.app.use_images else 'Admin.TLabel')
         self.save_settings()
         _, missing_windows = self.window_manager.find_matching_windows(self.config)
         self.compute_window_layout(self.config, missing_windows)

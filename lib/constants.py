@@ -68,7 +68,7 @@ class LayoutDefaults:
 
 class UIConstants:
     # Window dimensions
-    WINDOW_WIDTH = 850
+    WINDOW_WIDTH = 950
     WINDOW_HEIGHT = 530
     COMPACT_WIDTH = 180
     COMPACT_HEIGHT = 250
@@ -140,8 +140,11 @@ class WindowStyles:
     BORDER_COLOR = '#101010'
 
 class Fonts:
-    TEXT_NORMAL = ("Segoe UI", 10, "normal")
-    TEXT_BOLD = ("Segoe UI", 10, "bold")
+    TEXT_NORMAL = ("Consolas", 10, "normal")
+    TEXT_BOLD = ("Consolas", 10, "bold")
+    TEXT_TITLE = ("Consolas", 11, "bold")
+    #TEXT_NORMAL = ("Segoe UI", 10, "normal")
+    #TEXT_BOLD = ("Segoe UI", 10, "bold")
 
 class Themes:
     APPROVED_DARK_THEMES = (
