@@ -69,7 +69,7 @@ class LayoutDefaults:
 class UIConstants:
     # Window dimensions
     WINDOW_WIDTH = 850
-    WINDOW_HEIGHT = 520
+    WINDOW_HEIGHT = 530
     COMPACT_WIDTH = 180
     COMPACT_HEIGHT = 250
     BUTTON_WIDTH = 100

@@ -238,6 +238,11 @@ class TkGUIManager:
         self.layout_container.pack(side=tk.TOP, fill=tk.BOTH, expand=True)
         self.layout_frame = None  # Will hold the ScreenLayoutFrame
 
+        # Info label
+        self.info_label = ttk.Label(self.layout_container, text=f"")
+        self.info_label.configure(style='TLabel')
+        self.info_label.pack(side=tk.BOTTOM, fill=tk.X, padx=UIConstants.MARGIN[0] + 5)
+
         # Button section
         self.button_frame = ttk.Frame(self.main_frame, padding=UIConstants.MARGIN[0])
         self.button_frame.configure(style="TFrame")
@@ -323,40 +328,40 @@ class TkGUIManager:
             self.image_folder_button.destroy()
             self.take_screenshot_button.destroy()
         else:
-            self.snap_on_open_label = ttk.Label(self.aot_frame, text="Snap application on open:")
-            self.snap_on_open_label.configure(style='TLabel')
-            self.snap_on_open_label.pack(side=tk.LEFT, fill=tk.X, padx=(40, 10), pady=(0, UIConstants.MARGIN[2]))
+            self.snap_right_on_open = ttk.Checkbutton(self.aot_frame, text="Right", variable=self.snap, onvalue=2, offvalue=0, command=self.callbacks.get("snap"))
+            self.snap_right_on_open.configure(style='TCheckbutton')
+            self.snap_right_on_open.pack(side=tk.RIGHT, pady=(0, UIConstants.MARGIN[2]))
 
             self.snap_left_on_open = ttk.Checkbutton(self.aot_frame, text="Left", variable=self.snap, onvalue=1, offvalue=0, command=self.callbacks.get("snap"))
             self.snap_left_on_open.configure(style='TCheckbutton')
-            self.snap_left_on_open.pack(side=tk.LEFT, pady=(0, UIConstants.MARGIN[2]))
-            
-            self.snap_right_on_open = ttk.Checkbutton(self.aot_frame, text="Right", variable=self.snap, onvalue=2, offvalue=0, command=self.callbacks.get("snap"))
-            self.snap_right_on_open.configure(style='TCheckbutton')
-            self.snap_right_on_open.pack(side=tk.LEFT, pady=(0, UIConstants.MARGIN[2]))
+            self.snap_left_on_open.pack(side=tk.RIGHT, pady=(0, UIConstants.MARGIN[2]))
 
-            # Screenshot button
-            self.take_screenshot_button = ttk.Button(self.aot_button_frame, text="Take screenshots", command=self.callbacks.get("screenshot"), width=20)
-            self.take_screenshot_button.pack(side=tk.LEFT, padx=UIConstants.MARGIN[1] + 5, pady=UIConstants.MARGIN[0], fill=tk.X, expand=True)
-
-            # Images label
-            self.image_label = ttk.Label(self.aot_frame, text=f"Use images: {self.use_images}")
-            self.image_label.configure(style='TLabel')
-            self.image_label.pack(side=tk.RIGHT, anchor=tk.W, padx=UIConstants.MARGIN[1] + 5)
+            self.snap_on_open_label = ttk.Label(self.aot_frame, text="Snap application on open:")
+            self.snap_on_open_label.configure(style='TLabel')
+            self.snap_on_open_label.pack(side=tk.RIGHT, fill=tk.X, padx=(40, 10), pady=(0, UIConstants.MARGIN[2]))
 
             # Image toggle button
             self.image_button = ttk.Button(self.aot_button_frame, text="Toggle images", command=self.callbacks.get("toggle_images"), width=20)
-            self.image_button.pack(side=tk.LEFT, padx=UIConstants.MARGIN[1] + 5, pady=UIConstants.MARGIN[0], fill=tk.X, expand=True)
+            self.image_button.pack(side=tk.LEFT, padx=UIConstants.MARGIN[1] + 5, pady=UIConstants.MARGIN[0], fill=tk.X, expand=False)
+
+            # Images label
+            self.image_label = ttk.Label(self.aot_button_frame, text=f"Use images: {self.use_images}")
+            self.image_label.configure(style='TLabel')
+            self.image_label.pack(side=tk.LEFT, anchor=tk.W, padx=UIConstants.MARGIN[1] + 5)
+
+            # Screenshot button
+            self.take_screenshot_button = ttk.Button(self.aot_button_frame, text="Take screenshots", command=self.callbacks.get("screenshot"), width=20)
+            self.take_screenshot_button.pack(side=tk.RIGHT, padx=UIConstants.MARGIN[1] + 5, pady=UIConstants.MARGIN[0], fill=tk.X, expand=False)
             
             # Image download button
             self.image_download_button = ttk.Button(self.aot_button_frame, text="Download images", command=self.callbacks.get("download_images"),
                                                     state=tk.DISABLED if self.client_info_missing else tk.NORMAL,
                                                     style='Disabled.TButton' if self.client_info_missing else 'TButton', width=20)
-            self.image_download_button.pack(side=tk.LEFT, padx=UIConstants.MARGIN[1] + 5, pady=UIConstants.MARGIN[0], fill=tk.X, expand=True)
+            self.image_download_button.pack(side=tk.RIGHT, padx=UIConstants.MARGIN[1] + 5, pady=UIConstants.MARGIN[0], fill=tk.X, expand=False)
 
             # Image folder button
             self.image_folder_button = ttk.Button(self.aot_button_frame, text="Open image folder", command=self.callbacks.get("image_folder"), width=20)
-            self.image_folder_button.pack(side=tk.LEFT, padx=UIConstants.MARGIN[1] + 5, pady=UIConstants.MARGIN[0], fill=tk.X, expand=True)
+            self.image_folder_button.pack(side=tk.RIGHT, padx=UIConstants.MARGIN[1] + 5, pady=UIConstants.MARGIN[0], fill=tk.X, expand=False)
 
     def style_combobox_popup(self, event):
         try:

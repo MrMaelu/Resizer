@@ -195,6 +195,7 @@ class ApplicationState:
                 continue
 
     def download_screenshots(self):
+            self.app.image_download_button.config(state='disabled', style='Disabled.TButton')
             # List to hold all titles
             search_titles = set()
 
@@ -218,14 +219,16 @@ class ApplicationState:
 
                 if not os.path.exists(image_path):
                     self.asset_manager.search(title, save_dir=self.assets_dir)
-                    if self.app.image_label.winfo_exists():
-                        self.app.image_label['text'] = f"Downloading image for {title}"
+                    if self.app.info_label.winfo_exists():
+                        self.app.info_label['text'] = f"Downloading image for {title}"
 
             _, missing_windows = self.window_manager.find_matching_windows(self.config)
             if not self.compact:
                 self.compute_window_layout(self.config, missing_windows)
-                if self.app.image_label.winfo_exists():
-                    self.app.image_label['text'] = f"Use images: {self.app.use_images}"
+                if self.app.info_label.winfo_exists():
+                    self.app.info_label['text'] = f"Image download complete"
+
+            self.app.image_download_button.config(state='enabled', style='TButton')
 
     def take_screenshot(self):
         existing_windows, _ = self.window_manager.find_matching_windows(self.config)
