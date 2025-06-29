@@ -186,7 +186,8 @@ class WindowManager:
             # Restore minimized window if needed
             window = gw.Window(hwnd)
             if window.isMinimized:
-                self.restore_window(hwnd)
+                win32gui.ShowWindow(hwnd, win32con.SW_RESTORE)
+                win32gui.SetForegroundWindow(hwnd)
 
             # Apply settings
             # Check if the config is a dictionary and attempt to apply

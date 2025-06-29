@@ -69,6 +69,5 @@ _assets
 client_secrets.py
 layout_config.ini
 
-
 # Others
 tmp_*

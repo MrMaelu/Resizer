@@ -86,24 +86,25 @@ class ConfigManager:
 
     def load_settings(self):
         # Load application settings
-        defaults = False, False
+        defaults = False, False, 0
         try:
             if os.path.exists(self.settings_file):
                 with open(self.settings_file, 'r') as f:
                     settings = json.load(f)
                     compact = settings.get('compact', False)
                     use_images = settings.get('use_images', False)
-                    return compact, use_images
+                    snap  = settings.get('snap', 0)
+                    return compact, use_images, snap
             return defaults
         except Exception as e:
             print(f"Error loading settings: {e}")
             return defaults
 
-    def save_settings(self, compact_mode, use_images):
+    def save_settings(self, compact_mode, use_images, snap):
         # Save application settings
         try:
             with open(self.settings_file, 'w') as f:
-                json.dump({'compact': compact_mode, 'use_images': use_images}, f)
+                json.dump({'compact': compact_mode, 'use_images': use_images, 'snap': snap}, f)
             return True
         except Exception as e:
             print(f"Error saving settings: {e}")
@@ -111,22 +112,38 @@ class ConfigManager:
 
     def detect_default_config(self):
         # Detect and return the best default configuration
+        # Prioritizes configs with a window set to AOT and fall back to match on the most number of matching windows
         config_files, config_names = self.list_config_files()
+        highest_matching_windows = [None, 0]
+
+        all_titles = gw.getAllTitles()
+        cleaned_titles = []
+        for title in all_titles:
+            cleaned_titles.append(clean_window_title(title, sanitize=True))
         
         for config_file in config_files:
+            matching_windows = 0
             config = self.load_config(config_file)
             if not config:
                 continue
 
             for section in config.sections():
                 if config[section].getboolean("always_on_top", fallback=False):
-                    all_titles = gw.getAllTitles()
                     cleaned_section = clean_window_title(section, sanitize=True)
 
-                    for title in all_titles:
-                        cleaned_title = clean_window_title(title, sanitize=True)
-                        if cleaned_section in cleaned_title:
+                    for title in cleaned_titles:
+                        if cleaned_section in title:
                             return config_names[config_files.index(config_file)]
+                else:
+                    if section in cleaned_titles:
+                        matching_windows += 1
+            
+            if matching_windows > highest_matching_windows[1]:
+                highest_matching_windows[0] = config_names[config_files.index(config_file)]
+                highest_matching_windows[1] = matching_windows
+
+        if highest_matching_windows[0]:
+            return highest_matching_windows[0]
 
         return config_names[0] if config_names else None
 

@@ -24,19 +24,16 @@ class ApplicationState:
         # Assets
         self.assets_dir = None
         
-        # System state
-        self.is_admin = False
-        
         # Client ID / secret
         self.CLIENT_ID = None
         self.CLIENT_SECRET = None
         self.client_info_missing = True
         
         # UI state
+        self.is_admin = False
         self.compact = False
+        self.snap_side = 0
         self.use_images = False
-        self.waiting_for_window_selection = False
-        self.selected_window_hwnd = None
         
         # Screen info
         self.screen_width = 1920
@@ -47,27 +44,13 @@ class ApplicationState:
         self.config_names = []
         self.config = None
         self.config_dir = None
-        
-        # UI elements
-        self.status_label = None
-        self.always_on_top_status = None
-        self.config_dropdown = None
-        self.apply_button = None
-        self.select_window_button = None
-        self.create_config_button = None
-        self.open_config_button = None
-        self.restart_as_admin_button = None
-        self.toggle_compact_button = None
-        self.toggle_button = None
-        self.screen_canvas = None
-
 
 ######################
 # Callback functions #
 ######################
 
     def apply_settings(self):
-        selected_config = self.config_files[self.config_names.index(self.app.combo_box.var.get())]
+        selected_config = self.config_files[self.config_names.index(self.app.combo_box.get())]
 
         config = self.config_manager.load_config(selected_config)
         if config:
@@ -137,7 +120,8 @@ class ApplicationState:
             self.window_manager.toggle_always_on_top(hwnd)
         self.update_always_on_top_status()
     
-    def on_config_select(self, selected_value):
+    def on_config_select(self, event):
+        selected_value = event.widget.get()
         if selected_value in self.config_names:
             idx = self.config_names.index(selected_value)
             selected_config = self.config_files[idx]
@@ -305,18 +289,17 @@ class ApplicationState:
     def update_config_list(self, config=None):
         self.config_files, self.config_names = self.config_manager.list_config_files()
         if self.config_files and self.config_names:
-            self.app.combo_box.values = self.config_names
-            self.app.combo_box.var.set(config or self.config_names[0])
-            self.on_config_select(config or self.config_manager.detect_default_config())
+            self.app.combo_box['values'] = self.config_names
+            self.app.combo_box.set(config or self.config_names[0])
+            self.app.combo_box.event_generate("<<ComboboxSelected>>")
         else:
-            self.app.combo_box.values = []
-            self.app.combo_box.var.set('')
+            self.app.combo_box['values'] = []
+            self.app.combo_box.set('')
             if self.app.layout_frame:
                 self.app.layout_frame.destroy()
 
-
     def save_settings(self):
-        self.config_manager.save_settings(self.compact, self.app.use_images)
+        self.config_manager.save_settings(self.compact, self.app.use_images, self.app.snap.get())
 
     def load_managers(self):
         # Checking if the IGDB client info is added
@@ -342,9 +325,10 @@ def load_tk_GUI():
         "download_images": state.download_screenshots_threaded,
         "toggle_images": state.toggle_images,
         "screenshot": state.take_screenshot,
+        "snap": state.save_settings,
     }
 
-    app = TkGUIManager(root, callbacks=callbacks, compact=state.compact, is_admin=state.is_admin, use_images=state.use_images, client_info_missing=state.client_info_missing)
+    app = TkGUIManager(root, callbacks=callbacks, compact=state.compact, is_admin=state.is_admin, use_images=state.use_images, snap=state.snap_side, client_info_missing=state.client_info_missing)
     state.app = app
     state.app.assets_dir = state.assets_dir
 
@@ -371,12 +355,10 @@ if __name__ == "__main__":
     
     # Set config and asset folders
     state.config_dir = os.path.join(base_path, "configs")
-    if not os.path.exists(state.config_dir):
-        os.makedirs(state.config_dir)
+    if not os.path.exists(state.config_dir): os.makedirs(state.config_dir)
 
     state.assets_dir = os.path.join(base_path, "assets")
-    if not os.path.exists(state.assets_dir):
-        os.makedirs(state.assets_dir)
+    if not os.path.exists(state.assets_dir): os.makedirs(state.assets_dir)
 
     # Check for admin rights
     try:
@@ -385,6 +367,6 @@ if __name__ == "__main__":
         state.is_admin = False
     
     # Load config
-    state.compact, state.use_images = state.config_manager.load_settings()
+    state.compact, state.use_images, state.snap_side = state.config_manager.load_settings()
 
     load_tk_GUI()

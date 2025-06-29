@@ -66,13 +66,12 @@ class LayoutDefaults:
         4: FOUR_WINDOWS,
     }
 
-
 class UIConstants:
     # Window dimensions
     WINDOW_WIDTH = 850
-    WINDOW_HEIGHT = 480
+    WINDOW_HEIGHT = 520
     COMPACT_WIDTH = 180
-    COMPACT_HEIGHT = 400
+    COMPACT_HEIGHT = 250
     BUTTON_WIDTH = 100
     COMPACT_BUTTON_WIDTH = 80
     CANVAS_HEIGHT = 240
