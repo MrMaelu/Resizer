@@ -68,7 +68,7 @@ class LayoutDefaults:
 
 class UIConstants:
     # Window dimensions
-    WINDOW_WIDTH = 950
+    WINDOW_WIDTH = 850
     WINDOW_HEIGHT = 530
     COMPACT_WIDTH = 180
     COMPACT_HEIGHT = 250
@@ -114,6 +114,12 @@ class Colors:
     WINDOW_NORMAL_DARK = "#2A2A2A"
     WINDOW_ALWAYS_ON_TOP_DARK = "#3A3A3A"
     WINDOW_MISSING_DARK = "#3F1F1F"
+
+    # Buttons
+    BUTTON_NORMAL = BACKGROUND
+    BUTTON_ACTIVE = "#205020"
+    BUTTON_ACTIVE_HOVER = "#306030"
+    BUTTON_DISABLED = WINDOW_NORMAL_DARK
 
     # Status colors
     ADMIN_ENABLED = "green"

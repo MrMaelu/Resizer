@@ -214,7 +214,6 @@ class ConfigManager:
             has_titlebar = bool(win32gui.GetWindowLong(window._hWnd, win32con.GWL_STYLE) 
                           & win32con.WS_CAPTION)
             is_topmost = (window._hWnd == win32gui.GetForegroundWindow())
-            
             return {
                 'position': f'{window.left},{window.top}',
                 'size': f'{window.width},{window.height}',

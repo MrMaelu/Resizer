@@ -29,6 +29,7 @@ class TkGUIManager:
 
         self.compact_mode = compact
         self.snap = tk.IntVar(value=snap)
+        self.reapply = tk.IntVar()
         
         self.root = root
         self.root.title("Window Manager")
@@ -136,7 +137,27 @@ class TkGUIManager:
             font=Fonts.TEXT_NORMAL,
             foreground=self.text_dim,
             background=self.window_normal_dark,
-            borderwidth=0
+            borderwidth=2
+        )
+
+        style.configure("Admin.TButton",
+            font=Fonts.TEXT_BOLD,
+            foreground=self.text_normal,
+            background=Colors.BUTTON_ACTIVE,
+            bordercolor=Colors.BUTTON_ACTIVE,
+            borderwidth=2
+        )
+
+        style.configure("Active.TButton",
+            font=Fonts.TEXT_BOLD,
+            background=Colors.BUTTON_ACTIVE,
+            foreground=self.text_normal,
+            bordercolor=Colors.BUTTON_ACTIVE,
+            borderwidth=2
+        )
+        style.map("Active.TButton", 
+            background=[('active', Colors.BUTTON_ACTIVE_HOVER)],
+            foreground=[('active', self.text_normal)]
         )
         
         style.configure("TCombobox",
@@ -214,7 +235,7 @@ class TkGUIManager:
         header_frame.configure(style="TFrame")
         header_frame.pack(side=tk.TOP, fill=tk.X)
 
-        # Managed windows (initially hidden)
+        # Managed windows
         self.managed_frame = ttk.Frame(self.main_frame, padding=UIConstants.MARGIN[0])
         self.managed_frame.configure(style="TFrame")
         self.managed_frame.pack(side=tk.TOP, fill=tk.X)  # Pack here to fix order
@@ -263,42 +284,49 @@ class TkGUIManager:
         main_buttons.configure(style="TFrame")
         main_buttons.pack(side=tk.TOP, fill=tk.X)
 
-        # Add buttons with centered layout and adjusted width for symmetrical spacing
+        # Buttons
         buttons_1 = [
             ("Apply config", self.callbacks.get("apply_config")),
             ("Create config", self.callbacks.get("create_config")),
+            ("Delete config", self.callbacks.get("delete_config")),
             ("Open config folder", self.callbacks.get("open_config_folder")),
-            ("Restart as Admin", self.callbacks.get("restart_as_admin")),
         ]
         
         buttons_2 = [
-            ("Reset config", self.callbacks.get("reset_config")),
-            ("Delete config", self.callbacks.get("delete_config")),
+            ("Toggle images", self.callbacks.get("toggle_images")),
             ("Toggle compact", self.callbacks.get("toggle_compact") or self.toggle_compact),
-            ("Take screenshots", self.callbacks.get("screenshot"))
+            ("Take screenshots", self.callbacks.get("screenshot")),
+            ("Restart as Admin", self.callbacks.get("restart_as_admin")),
         ]
 
+        # First line of buttons
         self.buttons_1_container = ttk.Frame(main_buttons)
         self.buttons_1_container.pack(side=tk.TOP, fill=tk.X, expand=True, anchor=tk.CENTER)
-
         total_buttons_1_width = len(buttons_1) * 100
         self.buttons_1_container.configure(width=total_buttons_1_width)
+
+        # Auto re-apply checkbutton
+        self.button_divider_frame = ttk.Frame(main_buttons)
+        self.button_divider_frame.pack(side=tk.TOP, fill=tk.X, expand=True, anchor=tk.CENTER)
+        self.auto_apply_checkbutton = ttk.Checkbutton(self.button_divider_frame, text="Auto re-apply", variable=self.reapply, command=self.callbacks.get("auto_reapply"))
+        self.auto_apply_checkbutton.pack(side=tk.LEFT, padx=5, pady=5)
+
+        # Second line of buttons
+        self.buttons_2_container = ttk.Frame(main_buttons)
+        self.buttons_2_container.pack(side=tk.TOP, fill=tk.X, expand=True, anchor=tk.CENTER)
+        total_buttons_2_width = len(buttons_2) * 100
+        self.buttons_2_container.configure(width=total_buttons_2_width)
+
         for name, command in buttons_1:
-            adm = (self.is_admin and name == "Restart as Admin")
             btn = ttk.Button(self.buttons_1_container,
                 text=name,
                 command=command,
                 width=20,
-                state=tk.DISABLED if adm else tk.NORMAL,
-                style='Disabled.TButton' if adm else 'TButton',
+                state=tk.NORMAL,
+                style='TButton',
             )
             btn.pack(side=tk.LEFT, padx=UIConstants.MARGIN[1] + 5, pady=UIConstants.MARGIN[0], fill=tk.X, expand=True)
 
-        self.buttons_2_container = ttk.Frame(main_buttons)
-        self.buttons_2_container.pack(side=tk.TOP, fill=tk.X, expand=True, anchor=tk.CENTER)
-        
-        total_buttons_2_width = len(buttons_2) * 100
-        self.buttons_2_container.configure(width=total_buttons_2_width)
         for name, command in buttons_2:
             btn = ttk.Button(self.buttons_2_container,
                 text=name,
@@ -308,6 +336,8 @@ class TkGUIManager:
                 style='TButton',
             )
             btn.pack(side=tk.LEFT, padx=UIConstants.MARGIN[1] + 5, pady=UIConstants.MARGIN[0], fill=tk.X, expand=True)
+            if name == "Toggle images" and self.use_images: btn.configure(style="Active.TButton", text="Toggle images")
+            if name == "Restart as Admin" and self.is_admin: btn.configure(style='Admin.TButton', text="Running in admin mode", state=tk.DISABLED)
 
         # AOT container
         self.aot_container = ttk.Frame(self.button_frame, padding=UIConstants.MARGIN[0])
@@ -317,13 +347,13 @@ class TkGUIManager:
         self.aot_frame.configure(style="TFrame")
         self.aot_frame.pack(side=tk.TOP, fill=tk.X)
 
-        self.aot_button = ttk.Button(self.aot_frame, text="Toggle AOT", command=self.callbacks.get("toggle_AOT"), width=29)
-        self.aot_button.pack(side=tk.LEFT, padx=UIConstants.MARGIN[1] + 5, pady=UIConstants.MARGIN[0], fill=tk.X, expand=False)
+        self.aot_button = ttk.Button(self.aot_frame, text="Toggle AOT", command=self.callbacks.get("toggle_AOT"), width=20, state=tk.DISABLED, style='Disabled.TButton')
+        self.aot_button.pack(side=tk.LEFT, padx=UIConstants.MARGIN[1] + 5, pady=UIConstants.MARGIN[0], fill=tk.X, expand=True)
 
         # AOT status label
-        self.aot_label = ttk.Label(self.aot_frame, text=Messages.ALWAYS_ON_TOP_DISABLED, width=20)
+        self.aot_label = ttk.Label(self.aot_frame, text=Messages.ALWAYS_ON_TOP_DISABLED, width=22)
         self.aot_label.configure(style='TLabel')
-        self.aot_label.pack(side=tk.LEFT, anchor=tk.W, padx=UIConstants.MARGIN[1] + 5)
+        self.aot_label.pack(side=tk.LEFT, anchor=tk.W, padx=UIConstants.MARGIN[1] + 5, expand=True)
 
         # Images frame
         self.images_frame = ttk.Frame(self.aot_container, padding=UIConstants.MARGIN[0])
@@ -335,55 +365,43 @@ class TkGUIManager:
             self.snap_on_open_label.destroy()
             self.snap_left_on_open.destroy()
             self.snap_right_on_open.destroy()
-            self.image_label.destroy()
-            self.image_button.destroy()
             self.image_download_button.destroy()
             self.image_folder_button.destroy()
         else:
-            self.snap_right_on_open = ttk.Checkbutton(self.aot_frame, text="Right", variable=self.snap, onvalue=2, offvalue=0, command=self.callbacks.get("snap"), width=5)
-            self.snap_right_on_open.configure(style='TCheckbutton')
-            self.snap_right_on_open.pack(side=tk.RIGHT, pady=(0, UIConstants.MARGIN[2]))
-
-            self.snap_left_on_open = ttk.Checkbutton(self.aot_frame, text="Left", variable=self.snap, onvalue=1, offvalue=0, command=self.callbacks.get("snap"), width=5)
-            self.snap_left_on_open.configure(style='TCheckbutton')
-            self.snap_left_on_open.pack(side=tk.RIGHT, pady=(0, UIConstants.MARGIN[2]))
-
-            self.snap_on_open_label = ttk.Label(self.aot_frame, text="Snap application on open:")
+            # Snap on open buttons and label
+            self.snap_on_open_label = ttk.Label(self.images_frame, text="Snap application on open:")
             self.snap_on_open_label.configure(style='TLabel')
-            self.snap_on_open_label.pack(side=tk.RIGHT, fill=tk.X, padx=(40, 10), pady=(0, UIConstants.MARGIN[2]))
-            
-            # Image toggle button
-            self.image_button = ttk.Button(self.images_frame, text="Toggle images", command=self.callbacks.get("toggle_images"), width=29)
-            self.image_button.pack(side=tk.LEFT, padx=UIConstants.MARGIN[1] + 5, pady=UIConstants.MARGIN[0], fill=tk.X, expand=False)
+            self.snap_on_open_label.pack(side=tk.LEFT, fill=tk.X, padx=UIConstants.MARGIN[1] + 5, pady=(0, UIConstants.MARGIN[2]))
 
-            # Images label
-            self.image_label = ttk.Label(self.images_frame, text=f"Use images: {self.use_images}")
-            self.image_label.configure(style='TLabel' if not self.use_images else 'Admin.TLabel')
-            self.image_label.pack(side=tk.LEFT, anchor=tk.W, padx=UIConstants.MARGIN[1] + 5)
+            self.snap_left_on_open = ttk.Checkbutton(self.images_frame, text="Left", variable=self.snap, onvalue=1, offvalue=0, command=self.callbacks.get("snap"), width=5)
+            self.snap_left_on_open.configure(style='TCheckbutton')
+            self.snap_left_on_open.pack(side=tk.LEFT, pady=(0, UIConstants.MARGIN[2]))
+            
+            self.snap_right_on_open = ttk.Checkbutton(self.images_frame, text="Right", variable=self.snap, onvalue=2, offvalue=0, command=self.callbacks.get("snap"), width=5)
+            self.snap_right_on_open.configure(style='TCheckbutton')
+            self.snap_right_on_open.pack(side=tk.LEFT, pady=(0, UIConstants.MARGIN[2]))
 
             # Image download button
-            self.image_download_button = ttk.Button(self.images_frame, text="Download images", command=self.callbacks.get("download_images"),
+            self.image_download_button = ttk.Button(self.aot_frame, text="Download images", command=self.callbacks.get("download_images"),
                                                     state=tk.DISABLED if self.client_info_missing else tk.NORMAL,
-                                                    style='Disabled.TButton' if self.client_info_missing else 'TButton', width=20)
-            self.image_download_button.pack(side=tk.RIGHT, padx=UIConstants.MARGIN[1] + 5, pady=UIConstants.MARGIN[0], fill=tk.X, expand=False)
+                                                    style='TButton', width=20)
+            if self.client_info_missing: self.image_download_button.configure(style='Disabled.TButton', text="Client info missing")
+            self.image_download_button.pack(side=tk.RIGHT, padx=UIConstants.MARGIN[1] + 5, pady=UIConstants.MARGIN[0], fill=tk.X, expand=True)
 
             # Image folder button
-            self.image_folder_button = ttk.Button(self.images_frame, text="Open image folder", command=self.callbacks.get("image_folder"), width=20)
-            self.image_folder_button.pack(side=tk.RIGHT, padx=UIConstants.MARGIN[1] + 5, pady=UIConstants.MARGIN[0], fill=tk.X, expand=False)
+            self.image_folder_button = ttk.Button(self.aot_frame, text="Open image folder", command=self.callbacks.get("image_folder"), width=20)
+            self.image_folder_button.pack(side=tk.RIGHT, padx=UIConstants.MARGIN[1] + 5, pady=UIConstants.MARGIN[0], fill=tk.X, expand=True)
 
     def style_combobox_popup(self, event):
         try:
-            # Attempt to access the popup list widget (this can vary by Tkinter version and theme)
             popup = self.combo_box.tk.eval(f"ttk::combobox::PopdownWindow {self.combo_box._w}")
             if popup:
-                # Try to set background and foreground for the listbox inside the popup
                 self.root.tk.call(f"{popup}.f.l", "configure", "-background", self.background, "-foreground", self.text_normal)
                 self.root.tk.call(f"{popup}.f.l", "configure", "-selectbackground", self.window_normal, "-selectforeground", self.text_normal)
         except Exception as e:
             print(f"Error styling combobox popup: {e}")
 
     def setup_managed_text(self):
-        # Create managed windows frame if not exists
         if not hasattr(self, 'managed_frame') or not self.managed_frame.winfo_ismapped():
             self.managed_frame.pack(before=self.button_frame, side=tk.TOP, fill=tk.X)
         
@@ -408,7 +426,6 @@ class TkGUIManager:
 
         for i, line in enumerate(lines):
             if aot_flags[i]:
-                # Insert line with green foreground tag
                 self.managed_text.insert(tk.END, line + "\n", "aot")
             else:
                 self.managed_text.insert(tk.END, line + "\n")
@@ -451,10 +468,8 @@ class TkGUIManager:
 
         self.layout_frame = ScreenLayoutFrame(self.layout_container, self.res_x, self.res_y, windows, self.theme, assets_dir=self.assets_dir, use_images=self.use_images)
         self.layout_frame.pack(fill=tk.BOTH, expand=True)
-
         self.layout_frame.bind("<Enter>", self.on_enter_layout)
         self.layout_frame.bind("<Leave>", self.on_leave_layout)
-
         self.layout_frame.bind_all("<MouseWheel>", self.on_mousewheel)
 
     def scale_gui(self):
@@ -471,11 +486,11 @@ class TkGUIManager:
             idx = (self.theme_list.index(self.theme) + 1) % len(self.theme_list)
             self.theme = self.theme_list[idx]
 
-            # Redrawing canvas
+            # Redraw canvas
             canvas = self.layout_frame
             canvas.redraw(self.theme)
 
-            # Applying new style
+            # Apply new style
             self.setup_styles()
             self.combo_box.set_theme(self.theme)
             self.root.after(100, self.apply_titlebar_style)
@@ -493,7 +508,7 @@ class TkGUIManager:
             if self.layout_container:
                 self.layout_container.pack_forget()
             
-            buttons = ['Apply config', 'Create config', 'Reset config', 'Delete config', 'Toggle compact']
+            buttons = ['Apply config', 'Create config', 'Delete config', 'Toggle compact']
 
             for child in self.buttons_1_container.winfo_children():
                 if child.cget("text") in buttons:
@@ -503,6 +518,8 @@ class TkGUIManager:
             
             for child in self.buttons_2_container.winfo_children():
                 if child.cget("text") in buttons:
+                    if child.cget("text") == "Toggle compact":
+                        child.configure(style="Active.TButton")
                     child.pack(side=tk.TOP, padx=UIConstants.MARGIN[1] + 5, pady=UIConstants.MARGIN[0], fill=tk.X, expand=True)
                 else:
                     child.pack_forget()
@@ -523,6 +540,8 @@ class TkGUIManager:
             
             for child in self.buttons_2_container.winfo_children():
                 if isinstance(child, ttk.Button):
+                    if child.cget("text") == "Toggle compact":
+                        child.configure(style="TButton")
                     child.pack_forget()
                     child.pack(side=tk.LEFT, padx=UIConstants.MARGIN[1] + 5, pady=UIConstants.MARGIN[0], fill=tk.X, expand=True)
 
@@ -642,14 +661,13 @@ class TkGUIManager:
 
             self.apply_titlebar_style()
 
-            # Layout frame placeholder
             layout_container_create_config = ttk.Frame(settings_frame, padding=UIConstants.MARGIN[0])
             layout_container_create_config.configure(style="TFrame")
             layout_container_create_config.grid(row=row+3, column=0, columnspan=7, sticky='nsew')
             settings_frame.rowconfigure(row+2, weight=10)
             for col in range(7):
                 settings_frame.columnconfigure(col, weight=1)
-            self.layout_frame_create_config = None  # Will hold the ScreenLayoutFrame for create config
+            self.layout_frame_create_config = None
 
             def validate_int_pair(value, default=(0,0)):
                 try:
@@ -824,7 +842,6 @@ class TkGUIManager:
                 
                 self.layout_number = 0 if self.layout_number >= layout_max else self.layout_number + 1
                 update_layout_frame()
-                
 
             def on_save():
                 config_data = {}
@@ -853,15 +870,15 @@ class TkGUIManager:
             ttk.Button(settings_frame, text="Update drawing", command=update_layout_frame, width=15).grid(row=row, column=6, pady=pady, sticky='w')
             ttk.Button(settings_frame, text="Save Config", command=on_save, width=40).grid(row=row+1, column=2, columnspan=3, pady=pady)
 
-            config_win.geometry(f"{UIConstants.WINDOW_WIDTH+100}x{UIConstants.WINDOW_HEIGHT}")
+            config_win.geometry(f"{UIConstants.WINDOW_WIDTH}x{UIConstants.WINDOW_HEIGHT}")
 
         config_win = tk.Toplevel(parent)
         config_win.title("Create Config")
         config_win.configure(bg=self.background)
-        
+
         parent.update_idletasks()
-        x = parent.winfo_rootx() + 50
-        y = parent.winfo_rooty() + 50
+        x = parent.winfo_rootx()
+        y = parent.winfo_rooty()
         config_win.geometry(f"+{x}+{y}")
         config_win.update_idletasks()
         config_win.minsize(config_win.winfo_width(), config_win.winfo_height())
@@ -925,13 +942,13 @@ class ScreenLayoutFrame(ttk.Frame):
 
         self.canvas = tk.Canvas(self, bg=choose_color(Colors.BACKGROUND, Themes.APPROVED_DARK_THEMES, theme), highlightthickness=0)
         self.canvas.pack(fill=tk.BOTH, expand=True)
-        self.canvas.bind("<Configure>", self._on_resize)
+        self.canvas.bind("<Configure>", self.on_resize)
 
         self.screen_width = screen_width
         self.screen_height = screen_height
         self.taskbar_height = UIConstants.TASKBAR_HEIGHT
 
-        self._compute_bounds(include_placeholders=True)
+        self.compute_bounds(include_placeholders=True)
 
     def update_colors(self, theme):
         self.background = choose_color(Colors.BACKGROUND, Themes.APPROVED_DARK_THEMES, theme)
@@ -948,10 +965,9 @@ class ScreenLayoutFrame(ttk.Frame):
         self.update_colors(theme)
         width = self.canvas.winfo_width()
         height = self.canvas.winfo_height()
-        self._draw_layout(width, height)
+        self.draw_layout(width, height)
 
-    def _compute_bounds(self, include_placeholders=False):
-        # If no windows, set default bounds to screen size
+    def compute_bounds(self, include_placeholders=False):
         if not self.windows:
             self.min_x, self.min_y = 0, 0
             self.max_x, self.max_y = self.screen_width, self.screen_height
@@ -974,46 +990,43 @@ class ScreenLayoutFrame(ttk.Frame):
         self.max_x = max(xs_end)
         self.max_y = max(ys_end)
 
-    def _on_resize(self, event):
-        self._draw_layout(event.width, event.height)
+    def on_resize(self, event):
+        self.draw_layout(event.width, event.height)
 
-    def _draw_layout(self, width, height):
+    def draw_layout(self, width, height):
         self.canvas.delete("all")
 
         padding = 5
         drawable_height = height - padding * 2
         drawable_width = width - padding * 2
 
-        # Maintain aspect ratio of screen resolution (width/height)
         screen_ratio = self.screen_width / self.screen_height
         canvas_ratio = drawable_width / drawable_height
 
         if canvas_ratio > screen_ratio:
-            # Canvas too wide, scale width down
             scale = drawable_height / self.screen_height
             scaled_width = scale * self.screen_width
             x_offset = (drawable_width - scaled_width) / 2 + padding
             y_offset = padding
         else:
-            # Canvas too tall, scale height down
             scale = drawable_width / self.screen_width
             scaled_height = scale * self.screen_height
             x_offset = padding
             y_offset = (drawable_height - scaled_height) / 2 + padding
 
-        # Draw frame around the layout area
         frame_left = x_offset
         frame_top = y_offset
         frame_right = x_offset + scale * self.screen_width
         frame_bottom = y_offset + scale * self.screen_height
         frame_width = 5
 
+        # Backgound
         self.canvas.create_rectangle(
             frame_left, frame_top, frame_right, frame_bottom,
             outline=self.window_border, width=frame_width
         )
 
-        # Draw the taskbar at bottom inside frame
+        # Taskbar
         self.canvas.create_rectangle(
             frame_left,
             frame_bottom - self.taskbar_height * scale,
@@ -1023,6 +1036,7 @@ class ScreenLayoutFrame(ttk.Frame):
             outline=""
         )
 
+        # Draw window frames
         for win in self.windows:
             x = x_offset + win.pos_x * scale
             y = y_offset + win.pos_y * scale
@@ -1040,8 +1054,8 @@ class ScreenLayoutFrame(ttk.Frame):
                 width=2 if not win.always_on_top else 3
                 )
 
+            # Load images
             if self.use_images:
-                # Load image if it exists
                 image_paths = [
                     os.path.join(self.assets_dir, f"{win.search_title.replace(' ', '_').replace(':', '')}.jpg"),
                     os.path.join(self.assets_dir, f"{win.search_title.replace(' ', '_').replace(':', '')}.png")
@@ -1060,7 +1074,7 @@ class ScreenLayoutFrame(ttk.Frame):
                         except Exception as e:
                             print(f"Error loading image: {e}")
 
-            # Prepare info text lines
+            # Draw text
             info_lines = [
                 win.search_title or win.name,
                 f"Pos: {win.pos_x},{win.pos_y}",
@@ -1068,7 +1082,6 @@ class ScreenLayoutFrame(ttk.Frame):
                 f"AOT: {'Yes' if win.always_on_top else 'No'}"
             ]
 
-            # Font sizes and styles
             text_color = self.text_normal
             padding_x = 5
             padding_y = 5
@@ -1082,17 +1095,16 @@ class ScreenLayoutFrame(ttk.Frame):
                 text_x = x + padding_x
                 text_y = y + padding_y + i * line_height
                 
-                # Calculate text dimensions to size the background rectangle
+                # Text background
                 text_width = len(line) * 7.2
                 text_height = line_height - 2
                 
-                # Draw background rectangle for the text
                 self.canvas.create_rectangle(
                     text_x - 2, 
                     text_y - 2, 
                     text_x + text_width, 
                     text_y + text_height, 
-                    fill=self.window_normal_dark, 
+                    fill=self.window_normal if not win.always_on_top else self.window_always_on_top, 
                     outline=""
                 )
                 
@@ -1107,7 +1119,7 @@ class ScreenLayoutFrame(ttk.Frame):
                     justify=tk.LEFT
                 )
 
-            # Add missing text
+            # Missing text
             if not win.exists:
                 margin_bottom = 5 * scale
                 
@@ -1116,7 +1128,7 @@ class ScreenLayoutFrame(ttk.Frame):
                     (y + h - margin_bottom) - 12, 
                     (x + w / 2) + 28,
                     (y + h - margin_bottom) - 26,
-                    fill=self.window_normal_dark, 
+                    fill=self.window_normal if not win.always_on_top else self.window_always_on_top, 
                     outline=""
                 )
                 

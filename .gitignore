@@ -66,7 +66,7 @@ configs
 settings.json
 assets
 _assets
-client_secrets.py
+*client_secrets.py
 layout_config.ini
 
 # Others

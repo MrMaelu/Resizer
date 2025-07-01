@@ -44,48 +44,57 @@ class ApplicationState:
         self.config_names = []
         self.config = None
         self.config_dir = None
+        self.applied_config = None
 
 ######################
 # Callback functions #
 ######################
 
-    def apply_settings(self):
-        selected_config = self.config_files[self.config_names.index(self.app.combo_box.get())]
+    def apply_settings(self, reapply=False):
+        if not reapply:
+            for child in self.app.buttons_1_container.winfo_children():
+                if child.cget("text") == "Apply config":
+                    selected_config = self.config_files[self.config_names.index(self.app.combo_box.get())]
+                    selected_config_shortname = selected_config.replace('config_', '').replace('.ini', '')
+                    config = self.config_manager.load_config(selected_config)
 
-        config = self.config_manager.load_config(selected_config)
-        if config:
-            # Find matching windows
-            matching_windows, _ = self.window_manager.find_matching_windows(config)
-            
-            # Reset any existing windows first
+                    self.applied_config = config
+
+                    child.configure(style="Active.TButton", text="Reset config")
+                    self.app.info_label['text'] = f"Active config: {selected_config_shortname}"
+                    self.app.aot_button.configure(style='TButton', state=tk.NORMAL)
+
+                elif child.cget("text") == "Reset config" and not reapply:
+                    self.applied_config = None
+                    self.window_manager.reset_all_windows()
+                    child.configure(style="TButton", text="Apply config")
+                    self.app.info_label['text'] = f""
+                    self.app.aot_button.configure(style='Disabled.TButton', state=tk.DISABLED)
+                    self.app.reapply.set(0)
+
+        if self.applied_config:
+            matching_windows, _ = self.window_manager.find_matching_windows(self.applied_config)
             self.window_manager.reset_all_windows()
             
-            # Apply configuration to matching windows
+            # Apply configuration
             for match in matching_windows:
                 try:
                     hwnd = match['hwnd']
                     section = match['config_name']
-                    
-                    # Get window settings from config
                     settings = {
-                        'position': config.get(section, 'position', fallback=None),
-                        'size': config.get(section, 'size', fallback=None),
-                        'always_on_top': config.getboolean(section, 'always_on_top', fallback=False),
-                        'has_titlebar': config.getboolean(section, 'titlebar', fallback=True)
+                        'position': self.applied_config.get(section, 'position', fallback=None),
+                        'size': self.applied_config.get(section, 'size', fallback=None),
+                        'always_on_top': self.applied_config.getboolean(section, 'always_on_top', fallback=False),
+                        'has_titlebar': self.applied_config.getboolean(section, 'titlebar', fallback=True)
                     }
                     
-                    # Apply settings using window manager
                     self.window_manager.apply_window_config(settings, hwnd)
                     
                 except Exception as e:
                     print(f"Error applying settings to window {match['config_name']}: {e}")
                     continue
-            
-            self.update_always_on_top_status()
-
-    def reset_settings(self):
-        # Reset any existing windows first
-        self.window_manager.reset_all_windows()
+                
+        self.update_always_on_top_status()
 
     def create_config(self):
         self.app.create_config_ui(self.app.root,
@@ -119,6 +128,7 @@ class ApplicationState:
         for hwnd in self.window_manager.topmost_windows:
             self.window_manager.toggle_always_on_top(hwnd)
         self.update_always_on_top_status()
+        self.app.reapply.set(0)
     
     def on_config_select(self, event):
         selected_value = event.widget.get()
@@ -144,7 +154,7 @@ class ApplicationState:
             self.compute_window_layout(self.config, missing_windows)
 
     def delete_config(self):
-        current_name = self.app.combo_box.var.get().strip()
+        current_name = self.app.combo_box.get().strip()
         if not current_name:
             messagebox.showerror("Error", "No config selected to delete.")
             return
@@ -175,13 +185,70 @@ class ApplicationState:
                         
     def toggle_images(self):
         self.app.use_images = not self.app.use_images
-        self.app.image_label['text'] = f"Use images: {self.app.use_images}"
-        self.app.image_label.configure(style='TLabel' if not self.app.use_images else 'Admin.TLabel')
+        for child in self.app.buttons_2_container.winfo_children():
+            if child.cget("text") == "Toggle images" and self.app.use_images:
+                child.configure(style="Active.TButton", text="Toggle images")
+            elif child.cget("text") == "Toggle images" and not self.app.use_images:
+                child.configure(style="TButton", text="Toggle images")
+
         self.save_settings()
         _, missing_windows = self.window_manager.find_matching_windows(self.config)
         self.compute_window_layout(self.config, missing_windows)
 
+    def start_auto_reapply(self):
+        if self.app.reapply.get():
+            self.auto_reapply()
+        self.app.root.after(500, self.start_auto_reapply)
+
 ######################
+
+    def compare_window_data(self, settings, metrics):
+        differences = []
+        
+        settings_pos = tuple(map(int, settings['position'].split(','))) if settings['position'] else (0, 0)
+        if settings_pos != metrics['position']:
+            differences.append(f"Position mismatch: Settings={settings_pos}, Metrics={metrics['position']}")
+        
+        settings_size = tuple(map(int, settings['size'].split(','))) if settings['size'] else (0, 0)
+        if settings_size != metrics['size']:
+            differences.append(f"Size mismatch: Settings={settings_size}, Metrics={metrics['size']}")
+        
+        settings_aot = settings['always_on_top'] == True
+        metrics_aot = (metrics['exstyle'] & 0x00000008) != 0
+        if settings_aot != metrics_aot:
+            differences.append(f"Always on top mismatch: Settings={settings_aot}, Metrics={metrics_aot}")
+        
+        settings_titlebar = settings['has_titlebar'] == True
+        metrics_titlebar = (metrics['style'] & 0x00C00000) != 0
+        if settings_titlebar != metrics_titlebar:
+            differences.append(f"Titlebar mismatch: Settings={settings_titlebar}, Metrics={metrics_titlebar}")
+        
+        if not differences:
+            return True
+        
+        #print("\n".join(differences))
+        return False
+
+    def auto_reapply(self):
+        if self.app.reapply.get():
+            matching_windows, _ = self.window_manager.find_matching_windows(self.applied_config)
+            compare_results = []
+            for match in matching_windows:
+                hwnd = match['hwnd']
+                section = match['config_name']
+                
+                # Get window settings from config
+                settings = {
+                    'position': self.applied_config.get(section, 'position', fallback=None),
+                    'size': self.applied_config.get(section, 'size', fallback=None),
+                    'always_on_top': self.applied_config.getboolean(section, 'always_on_top', fallback=False),
+                    'has_titlebar': self.applied_config.getboolean(section, 'titlebar', fallback=True)
+                }
+
+                metrics = self.window_manager.get_window_metrics(hwnd)
+                compare_results.append(self.compare_window_data(settings, metrics))
+            if not all(compare_results):
+                self.apply_settings(reapply=True)
 
     def check_igdb_client_info(self):
         for module_name in ("lib.client_secrets", "client_secrets"):
@@ -316,7 +383,6 @@ def load_tk_GUI():
     root = tk.Tk()
     callbacks = {
         "apply_config": state.apply_settings,
-        "reset_config": state.reset_settings,
         "create_config": state.create_config,
         "open_config_folder": state.open_config_folder,
         "restart_as_admin": state.restart_as_admin,
@@ -330,6 +396,7 @@ def load_tk_GUI():
         "toggle_images": state.toggle_images,
         "screenshot": state.take_screenshot,
         "snap": state.save_settings,
+        "auto_reapply": state.start_auto_reapply,
     }
 
     app = TkGUIManager(root, callbacks=callbacks, compact=state.compact, is_admin=state.is_admin, use_images=state.use_images, snap=state.snap_side, client_info_missing=state.client_info_missing)
