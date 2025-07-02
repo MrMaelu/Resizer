@@ -766,8 +766,8 @@ class TkGUIManager:
 
                 # 2 windows
                 elif len(sorted_windows) == 2:
-                    numerator, side = layout_configs[self.layout_number]
-                    ratio = Fraction(numerator, 9)
+                    numerator, denominator, side = layout_configs[self.layout_number]
+                    ratio = Fraction(numerator, denominator)
 
                     left_x = 0
                     aot = 1 if side in ('R', 'CL') else 0
@@ -813,11 +813,28 @@ class TkGUIManager:
                     # Set name
                     config_name_var.set(f"{settings_vars[sorted_windows[aot]][4].get()} {side}_{numerator}-9")
                 else:
-                    window_width = screen_width / len(sorted_windows)
+                    numerator, denominator, side = layout_configs[self.layout_number]
+                    ratio = Fraction(numerator, denominator)
+
+                    x = 0
+                    aot = 1
+
+                    window_width = screen_height * ratio
+
+                    if side == 'R':
+                        x = screen_width - window_width
+                    elif side == 'L':
+                        x = 0
+                    elif side == 'C':
+                        x = (screen_width / 2) - (window_width / 2)
+
+                    print(numerator, denominator, side)
+
                     for i, title in enumerate(sorted_windows):
-                        settings_vars[title][0].set(f'{int(window_width * i)},0')
-                        settings_vars[title][1].set(f'{int(window_width)},{int(usable_height)}')
-                        settings_vars[title][2].set(False)
+                        settings_vars[title][0].set(f'{int(x)},0') # Position
+                        settings_vars[title][1].set(f'{int(window_width)},{int(screen_height)}') # Size
+                        settings_vars[title][2].set(True)   # Always on top
+                        settings_vars[title][3].set(False) # Titlebar
 
                 preset_label_text = f"Preset {self.layout_number + 1}/{layout_max + 1}\n\n"
 
@@ -838,7 +855,10 @@ class TkGUIManager:
                         f"{side}: {numerator}/9"
                     )
                 else:
-                    self.ratio_label['text'] = ("def")
+                    self.ratio_label['text'] = (
+                        f"{preset_label_text}"
+                        f"{side}: {numerator}/9"
+                    )
                 
                 self.layout_number = 0 if self.layout_number >= layout_max else self.layout_number + 1
                 update_layout_frame()
