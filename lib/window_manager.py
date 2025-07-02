@@ -1,3 +1,4 @@
+import time
 import win32gui
 import win32con
 import pygetwindow as gw
@@ -20,7 +21,7 @@ class WindowManager:
         ]
 
 
-    def apply_window_config(self, config, hwnd):
+    def apply_window_config(self, config, hwnd, window_name=None):
         if self.is_valid_window(hwnd):
             try:
                 if not config:
@@ -33,51 +34,43 @@ class WindowManager:
                     win32gui.SetForegroundWindow(hwnd)
 
                 if isinstance(config, dict):
-                    if 'has_titlebar' in config:
-                        if not config['has_titlebar']:
-                            self.make_borderless(hwnd)
-                        else:
-                            self.restore_window_frame(hwnd)
-
+                    # Get configuration values
+                    has_titlebar = config.get('has_titlebar', True)
                     if 'position' in config and config['position']:
-                        try:
-                            pos = eval(config['position']) if isinstance(config['position'], str) else config['position']
-                            self.set_window_position(hwnd, pos[0], pos[1])
-                        except Exception as e:
-                            print(f"Error setting position: {e}")
-
+                        position = eval(config['position']) if isinstance(config['position'], str) else config['position']
                     if 'size' in config and config['size']:
-                        try:
-                            size = eval(config['size']) if isinstance(config['size'], str) else config['size']
-                            self.set_window_size(hwnd, size[0], size[1])
-                        except Exception as e:
-                            print(f"Error setting size: {e}")
-
+                        size = eval(config['size']) if isinstance(config['size'], str) else config['size']
                     if 'always_on_top' in config:
-                        self.set_always_on_top(hwnd, config['always_on_top'])
+                        always_on_top = config['always_on_top']
 
-                elif hasattr(config, 'sections'):
-                    window_title = self.get_window_title(hwnd)
-                    for section in config.sections():
-                        if section.lower().strip() in window_title.lower().strip():
-                            position = config.get(section, 'position', fallback=None)
-                            size = config.get(section, 'size', fallback=None)
-                            always_on_top = config.getboolean(section, 'always_on_top', fallback=False)
-                            has_titlebar = config.getboolean(section, 'has_titlebar', fallback=True)
-                            
-                            self.set_always_on_top(hwnd, always_on_top)
-                            if not has_titlebar:
-                                self.make_borderless(hwnd)
-                            else:
-                                self.restore_window_frame(hwnd)
-                            if position:
-                                pos = eval(position)
-                                self.set_window_position(hwnd, pos[0], pos[1])
-                            if size:
-                                dimensions = eval(size)
-                                self.set_window_size(hwnd, dimensions[0], dimensions[1])
-                            break
+                    # Apply settings
+                    apply_funcs = {
+                        'aot': (self.set_always_on_top, always_on_top),
+                        'titlebar': (self.keep_titlebar, has_titlebar),
+                        'pos': (self.set_window_position, position[0], position[1]),
+                        'size': (self.set_window_size, size[0], size[1])
+                    }
+
+                    default_apply_order = [
+                        'titlebar',
+                        'pos',
+                        'size',
+                        'aot'
+                        ]
+
+                    if window_name == 'Diablo IV':
+                        apply_order = ['titlebar', 'pos', 'size', 'aot'] # Example override for specific game
+                    else:
+                        apply_order = default_apply_order
+
+                    for key in apply_order:
+                        args = apply_funcs[key][1:]
+                        if args:
+                            apply_funcs[key][0](hwnd, *args)
+                        time.sleep(0.1)
+
                 return True
+
             except Exception as e:
                 print(f"Error applying window config: {e}")
                 return False
@@ -126,7 +119,9 @@ class WindowManager:
                 print(f"Error setting window size for {hwnd}: {e}")
                 return False
 
-    def make_borderless(self, hwnd):
+    def keep_titlebar(self, hwnd, restore=False):
+        if restore:
+            return self.restore_window_frame(hwnd)
         if self.is_valid_window(hwnd):
             try:
                 style = win32gui.GetWindowLong(hwnd, win32con.GWL_STYLE)

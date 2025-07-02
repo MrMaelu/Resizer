@@ -88,7 +88,7 @@ class ApplicationState:
                         'has_titlebar': self.applied_config.getboolean(section, 'titlebar', fallback=True)
                     }
                     
-                    self.window_manager.apply_window_config(settings, hwnd)
+                    self.window_manager.apply_window_config(settings, hwnd, section)
                     
                 except Exception as e:
                     print(f"Error applying settings to window {match['config_name']}: {e}")
