@@ -167,11 +167,6 @@ class ApplicationState:
             else:
                 messagebox.showerror("Error", f"Failed to delete '{current_name}'.")
 
-    def theme(self):
-        self.app.change_gui_theme()
-        if self.app.compact_mode:
-            self.update_managed_windows_list(self.config)
-
     def open_image_folder(self):
         # Open the image folder in File Explorer
         try:
@@ -390,7 +385,6 @@ def load_tk_GUI():
         "config_selected": state.on_config_select,
         "toggle_compact": state.toggle_compact_mode,
         "delete_config": state.delete_config,
-        "theme": state.theme,
         "image_folder": state.open_image_folder,
         "download_images": state.download_screenshots_threaded,
         "toggle_images": state.toggle_images,

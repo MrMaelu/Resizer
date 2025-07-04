@@ -1,6 +1,6 @@
 [project]
 name = "WindowPositioner"
-version = "0.3.0"
+version = "0.5.0"
 description = "Will let you control size, position, always-on-top and can remove titlebar for windowed applications."
 readme = "README.md"
 requires-python = ">=3.12"

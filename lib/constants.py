@@ -161,12 +161,3 @@ class Fonts:
     TEXT_TITLE = ("Consolas", 11, "bold")
     #TEXT_NORMAL = ("Segoe UI", 10, "normal")
     #TEXT_BOLD = ("Segoe UI", 10, "bold")
-
-class Themes:
-    APPROVED_DARK_THEMES = (
-        'clam',
-    )
-    
-    APPROVED_LIGHT_THEMES = (
-        'default',
-    )

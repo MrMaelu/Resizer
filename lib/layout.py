@@ -9,23 +9,12 @@ from tkinter import ttk, messagebox
 
 # Local imports
 from lib.config_manager import ConfigManager
-from lib.utils import WindowInfo, clean_window_title, choose_color
-from lib.constants import UIConstants, Colors, Messages, WindowStyles, Fonts, Themes
+from lib.utils import WindowInfo, clean_window_title
+from lib.constants import UIConstants, Colors, Messages, WindowStyles, Fonts, LayoutDefaults
 
 class TkGUIManager:
     def __init__(self, root, callbacks=None, compact=False, is_admin=False, use_images=False, snap=0, client_info_missing=True):
         self.style = ttk.Style()
-        self.available_themes = self.style.theme_names()
-        self.theme_list = [
-            theme for theme in self.available_themes
-            if theme in Themes.APPROVED_DARK_THEMES
-            or theme in Themes.APPROVED_LIGHT_THEMES
-        ]
-
-        self.theme = self.theme_list[0] or ''
-        for theme in Themes.APPROVED_DARK_THEMES:
-            if theme in self.theme_list:
-                self.theme = theme
 
         self.compact_mode = compact
         self.snap = tk.IntVar(value=snap)
@@ -33,7 +22,7 @@ class TkGUIManager:
         
         self.root = root
         self.root.title("Window Manager")
-        self.root.configure(bg=choose_color(Colors.BACKGROUND, Themes.APPROVED_DARK_THEMES, self.theme))
+        self.root.configure(bg=Colors.BACKGROUND)
 
         self.res_x = self.root.winfo_screenwidth()
         self.res_y = self.root.winfo_screenheight()
@@ -79,40 +68,29 @@ class TkGUIManager:
 
     def setup_styles(self):
         style = ttk.Style()
-        style.theme_use(self.theme)
+        style.theme_use('clam')
 
-        self.background = choose_color(Colors.BACKGROUND, Themes.APPROVED_DARK_THEMES, self.theme)
-        self.text_normal = choose_color(Colors.TEXT_NORMAL, Themes.APPROVED_DARK_THEMES, self.theme)
-        self.window_normal = choose_color(Colors.WINDOW_NORMAL, Themes.APPROVED_DARK_THEMES, self.theme)
-        self.window_normal_dark = choose_color(Colors.WINDOW_NORMAL_DARK, Themes.APPROVED_DARK_THEMES, self.theme)
-        self.window_border = choose_color(Colors.WINDOW_BORDER, Themes.APPROVED_DARK_THEMES, self.theme)
-        self.taskbar = choose_color(Colors.TASKBAR, Themes.APPROVED_DARK_THEMES, self.theme)
-        self.window_always_on_top = choose_color(Colors.WINDOW_ALWAYS_ON_TOP, Themes.APPROVED_DARK_THEMES, self.theme)
-        self.text_error = choose_color(Colors.TEXT_ERROR, Themes.APPROVED_DARK_THEMES, self.theme)
-        self.text_always_on_top = choose_color(Colors.TEXT_ALWAYS_ON_TOP, Themes.APPROVED_DARK_THEMES, self.theme)
-        self.text_dim = choose_color(Colors.TEXT_DIM, Themes.APPROVED_DARK_THEMES, self.theme)
-
-        style.configure("TFrame", background=self.background)
+        style.configure("TFrame", background=Colors.BACKGROUND)
         
         style.configure("TLabel",
             font=self.default_font,
-            background=self.background,
-            foreground=self.text_normal
+            background=Colors.BACKGROUND,
+            foreground=Colors.TEXT_NORMAL
         )
 
         style.configure("Admin.TLabel",
             font=Fonts.TEXT_BOLD,
-            background=self.background,
+            background=Colors.BACKGROUND,
             foreground=Colors.ADMIN_ENABLED
         )
         
         style.configure("TCheckbutton",
             font=self.default_font,
-            background=self.background,
-            foreground=self.text_normal,
+            background=Colors.BACKGROUND,
+            foreground=Colors.TEXT_NORMAL,
         )
         style.map("TCheckbutton", 
-            background=[('active', self.window_normal)], 
+            background=[('active', Colors.WINDOW_NORMAL)], 
             foreground=[
                 ('active', Colors.ADMIN_ENABLED), 
                 ('selected', Colors.ADMIN_ENABLED),
@@ -126,23 +104,23 @@ class TkGUIManager:
 
         style.configure("TButton",
             font=self.default_font,
-            background=self.background,
-            foreground=self.text_normal,
-            activebackground=self.window_normal,
-            activeforeground=self.text_normal
+            background=Colors.BACKGROUND,
+            foreground=Colors.TEXT_NORMAL,
+            activebackground=Colors.WINDOW_NORMAL,
+            activeforeground=Colors.TEXT_NORMAL
         )
-        style.map("TButton", background=[('active', self.window_normal)], foreground=[('active', self.text_normal)])
+        style.map("TButton", background=[('active', Colors.WINDOW_NORMAL)], foreground=[('active', Colors.TEXT_NORMAL)])
 
         style.configure("Disabled.TButton",
             font=Fonts.TEXT_NORMAL,
-            foreground=self.text_dim,
-            background=self.window_normal_dark,
+            foreground=Colors.TEXT_DIM,
+            background=Colors.WINDOW_NORMAL_DARK,
             borderwidth=2
         )
 
         style.configure("Admin.TButton",
             font=Fonts.TEXT_BOLD,
-            foreground=self.text_normal,
+            foreground=Colors.TEXT_NORMAL,
             background=Colors.BUTTON_ACTIVE,
             bordercolor=Colors.BUTTON_ACTIVE,
             borderwidth=2
@@ -151,76 +129,76 @@ class TkGUIManager:
         style.configure("Active.TButton",
             font=Fonts.TEXT_BOLD,
             background=Colors.BUTTON_ACTIVE,
-            foreground=self.text_normal,
+            foreground=Colors.TEXT_NORMAL,
             bordercolor=Colors.BUTTON_ACTIVE,
             borderwidth=2
         )
         style.map("Active.TButton", 
             background=[('active', Colors.BUTTON_ACTIVE_HOVER)],
-            foreground=[('active', self.text_normal)]
+            foreground=[('active', Colors.TEXT_NORMAL)]
         )
         
         style.configure("TCombobox",
             font=self.default_font,
-            fieldbackground=self.background,
-            foreground=self.text_normal,
-            selectedbackground=self.background,
-            selectedforeground=self.text_normal,
+            fieldbackground=Colors.BACKGROUND,
+            foreground=Colors.TEXT_NORMAL,
+            selectedbackground=Colors.BACKGROUND,
+            selectedforeground=Colors.TEXT_NORMAL,
             borderwidth=1,
             padding=4,
         )
 
         style.configure("TCombobox",
             font=self.default_font,
-            fieldbackground=self.background,
-            foreground=self.text_normal,
+            fieldbackground=Colors.BACKGROUND,
+            foreground=Colors.TEXT_NORMAL,
             borderwidth=1,
             padding=4,
-            popupbackground=self.background
+            popupbackground=Colors.BACKGROUND
         )
 
         style.map("TCombobox",
             fieldbackground=[
-                ('readonly', self.background),
-                ('!readonly', self.background),
-                ('active', self.background)
+                ('readonly', Colors.BACKGROUND),
+                ('!readonly', Colors.BACKGROUND),
+                ('active', Colors.BACKGROUND)
             ],
             background=[
-                ('readonly', self.background),
-                ('active', self.background)
+                ('readonly', Colors.BACKGROUND),
+                ('active', Colors.BACKGROUND)
             ],
             foreground=[
-                ('readonly', self.text_normal),
-                ('active', self.text_normal)
+                ('readonly', Colors.TEXT_NORMAL),
+                ('active', Colors.TEXT_NORMAL)
             ],
             selectbackground=[
-                ('readonly', self.background),
-                ('active', self.background)
+                ('readonly', Colors.BACKGROUND),
+                ('active', Colors.BACKGROUND)
             ],
             selectforeground=[
-                ('readonly', self.text_normal),
-                ('active', self.text_normal)
+                ('readonly', Colors.TEXT_NORMAL),
+                ('active', Colors.TEXT_NORMAL)
             ],
             arrowcolor=[
-                ('readonly', self.text_normal),
-                ('active', self.text_normal)
+                ('readonly', Colors.TEXT_NORMAL),
+                ('active', Colors.TEXT_NORMAL)
             ]
         )
 
         style.configure("TCombobox.Vertical.TScrollbar",
-            troughcolor=self.background,
-            background=self.window_normal,
-            arrowcolor=self.text_normal,
+            troughcolor=Colors.BACKGROUND,
+            background=Colors.WINDOW_NORMAL,
+            arrowcolor=Colors.TEXT_NORMAL,
             relief="flat",
-            bordercolor=self.background
+            bordercolor=Colors.BACKGROUND
         )
 
     def apply_titlebar_style(self):
         try:
             window = windll.user32.GetActiveWindow()
-            pywinstyles.apply_style(window, 'dark' if self.theme in Themes.APPROVED_DARK_THEMES else 'normal')
-            pywinstyles.change_header_color(window, color=choose_color(WindowStyles.TITLE_BAR_COLOR, Themes.APPROVED_DARK_THEMES, self.theme))
-            pywinstyles.change_title_color(window, color=choose_color(WindowStyles.TITLE_TEXT_COLOR, Themes.APPROVED_DARK_THEMES, self.theme))
+            pywinstyles.apply_style(window, 'dark')
+            pywinstyles.change_header_color(window, color=WindowStyles.TITLE_BAR_COLOR)
+            pywinstyles.change_title_color(window, color=WindowStyles.TITLE_TEXT_COLOR)
         except Exception as e:
             print(f"Error applying dark mode to titlebar: {e}")
     
@@ -396,8 +374,8 @@ class TkGUIManager:
         try:
             popup = self.combo_box.tk.eval(f"ttk::combobox::PopdownWindow {self.combo_box._w}")
             if popup:
-                self.root.tk.call(f"{popup}.f.l", "configure", "-background", self.background, "-foreground", self.text_normal)
-                self.root.tk.call(f"{popup}.f.l", "configure", "-selectbackground", self.window_normal, "-selectforeground", self.text_normal)
+                self.root.tk.call(f"{popup}.f.l", "configure", "-background", Colors.BACKGROUND, "-foreground", Colors.TEXT_NORMAL)
+                self.root.tk.call(f"{popup}.f.l", "configure", "-selectbackground", Colors.WINDOW_NORMAL, "-selectforeground", Colors.TEXT_NORMAL)
         except Exception as e:
             print(f"Error styling combobox popup: {e}")
 
@@ -414,8 +392,8 @@ class TkGUIManager:
             self.managed_text = tk.Text(self.managed_frame,
                 height=4,
                 wrap=tk.WORD,
-                background=self.background,
-                foreground=self.text_normal,
+                background=Colors.BACKGROUND,
+                foreground=Colors.TEXT_NORMAL,
                 font=self.default_font
             )
             self.managed_text.pack(side=tk.TOP, fill=tk.X, expand=False)
@@ -430,7 +408,7 @@ class TkGUIManager:
             else:
                 self.managed_text.insert(tk.END, line + "\n")
 
-        self.managed_text.tag_config("aot", foreground=self.text_always_on_top, font=Fonts.TEXT_BOLD)
+        self.managed_text.tag_config("aot", foreground=Colors.TEXT_ALWAYS_ON_TOP, font=Fonts.TEXT_BOLD)
         self.managed_text.config(state=tk.DISABLED)
 
     def remove_managed_windows_frame(self):
@@ -466,7 +444,7 @@ class TkGUIManager:
         if self.layout_frame:
             self.layout_frame.destroy()
 
-        self.layout_frame = ScreenLayoutFrame(self.layout_container, self.res_x, self.res_y, windows, self.theme, assets_dir=self.assets_dir, use_images=self.use_images)
+        self.layout_frame = ScreenLayoutFrame(self.layout_container, self.res_x, self.res_y, windows, assets_dir=self.assets_dir, use_images=self.use_images)
         self.layout_frame.pack(fill=tk.BOTH, expand=True)
         self.layout_frame.bind("<Enter>", self.on_enter_layout)
         self.layout_frame.bind("<Leave>", self.on_leave_layout)
@@ -480,27 +458,6 @@ class TkGUIManager:
             self.root.geometry(f"{UIConstants.COMPACT_WIDTH}x{height}")
         else:
             self.root.geometry(f"{UIConstants.WINDOW_WIDTH}x{UIConstants.WINDOW_HEIGHT}")
-    
-    def change_gui_theme(self):
-        try:
-            idx = (self.theme_list.index(self.theme) + 1) % len(self.theme_list)
-            self.theme = self.theme_list[idx]
-
-            # Redraw canvas
-            canvas = self.layout_frame
-            canvas.redraw(self.theme)
-
-            # Apply new style
-            self.setup_styles()
-            self.combo_box.set_theme(self.theme)
-            self.root.after(100, self.apply_titlebar_style)
-            if self.compact_mode:
-                self.remove_managed_windows_frame()
-                self.setup_managed_text()
-            
-            self.scale_gui()
-        except Exception as e:
-            print("Theme change failed:", e)
 
     def toggle_compact(self, startup=False):
         if not startup: self.compact_mode = not self.compact_mode
@@ -599,9 +556,9 @@ class TkGUIManager:
                 tk.Entry(settings_frame,
                     textvariable=name_var,
                     width=25,
-                    bg=self.background,
-                    fg=self.text_normal,
-                    insertbackground=self.text_normal,
+                    bg=Colors.BACKGROUND,
+                    fg=Colors.TEXT_NORMAL,
+                    insertbackground=Colors.TEXT_NORMAL,
                     font=entry_font
                 ).grid(row=row, column=0, padx=(0, 10))
 
@@ -609,9 +566,9 @@ class TkGUIManager:
                 tk.Entry(settings_frame,
                     textvariable=pos_var,
                     width=10,
-                    bg=self.background,
-                    fg=self.text_normal,
-                    insertbackground=self.text_normal,
+                    bg=Colors.BACKGROUND,
+                    fg=Colors.TEXT_NORMAL,
+                    insertbackground=Colors.TEXT_NORMAL,
                     font=entry_font
                 ).grid(row=row, column=2)
 
@@ -619,31 +576,31 @@ class TkGUIManager:
                 tk.Entry(settings_frame,
                     textvariable=size_var,
                     width=10,
-                    bg=self.background,
-                    fg=self.text_normal,
-                    insertbackground=self.text_normal,
+                    bg=Colors.BACKGROUND,
+                    fg=Colors.TEXT_NORMAL,
+                    insertbackground=Colors.TEXT_NORMAL,
                     font=entry_font
                 ).grid(row=row, column=4)
 
                 tk.Checkbutton(settings_frame,
                     text="Always on top",
                     variable=aot_var,
-                    bg=self.background,
-                    fg=self.text_normal,
-                    selectcolor=self.window_normal,
-                    activebackground=self.window_normal_dark,
-                    activeforeground=self.text_normal,
+                    bg=Colors.BACKGROUND,
+                    fg=Colors.TEXT_NORMAL,
+                    selectcolor=Colors.WINDOW_NORMAL,
+                    activebackground=Colors.WINDOW_NORMAL_DARK,
+                    activeforeground=Colors.TEXT_NORMAL,
                     font=entry_font
                 ).grid(row=row, column=5)
                 
                 tk.Checkbutton(settings_frame,
                     text="Titlebar",
                     variable=titlebar_var,
-                    bg=self.background,
-                    fg=self.text_normal,
-                    selectcolor=self.window_normal,
-                    activebackground=self.window_normal_dark,
-                    activeforeground=self.text_normal,
+                    bg=Colors.BACKGROUND,
+                    fg=Colors.TEXT_NORMAL,
+                    selectcolor=Colors.WINDOW_NORMAL,
+                    activebackground=Colors.WINDOW_NORMAL_DARK,
+                    activeforeground=Colors.TEXT_NORMAL,
                     font=entry_font
                 ).grid(row=row, column=6)
 
@@ -653,9 +610,9 @@ class TkGUIManager:
             config_name_var = tk.StringVar()
             tk.Entry(settings_frame,
                 textvariable=config_name_var,
-                bg=self.background,
-                fg=self.text_normal,
-                insertbackground=self.text_normal,
+                bg=Colors.BACKGROUND,
+                fg=Colors.TEXT_NORMAL,
+                insertbackground=Colors.TEXT_NORMAL,
                 font=entry_font,
                 ).grid(row=row, column=2, columnspan=3, pady=pady, sticky='ew')
 
@@ -701,7 +658,6 @@ class TkGUIManager:
                                                                 self.root.winfo_screenwidth(),
                                                                 self.root.winfo_screenheight(),
                                                                 windows,
-                                                                self.theme,
                                                                 self.assets_dir,
                                                                 )
                     self.layout_frame_create_config.pack(expand=True, fill='both')
@@ -713,9 +669,15 @@ class TkGUIManager:
                 screen_height = self.root.winfo_screenheight()
                 taskbar_height = UIConstants.TASKBAR_HEIGHT
                 usable_height = screen_height - taskbar_height
-
+                
+                if not len(sorted_windows) in self.auto_align_layouts:
+                    in_defaults = '' if len(sorted_windows) not in LayoutDefaults.DEFAULT_LAYOUTS else ' Try to reset to defaults.'
+                    self.ratio_label['text'] = (f"No auto-alignment available for {len(sorted_windows)} windows. {in_defaults}")
+                    return
                 layout_configs = self.auto_align_layouts[len(sorted_windows)]
                 layout_max = len(layout_configs) - 1
+
+                side_text = ""
 
                 # 4 windows
                 if len(sorted_windows) == 4:
@@ -773,15 +735,19 @@ class TkGUIManager:
                     aot = 1 if side in ('R', 'CL') else 0
 
                     if side == 'R':
+                        side_text = "Right"
                         right_width = screen_height * ratio
                         left_width = screen_width - right_width
                     elif side == 'L':
+                        side_text = "Left"
                         left_width = screen_height * ratio
                         right_width = screen_width - left_width
                     elif side == 'CL':
+                        side_text = "Center Left"
                         right_width = screen_height * ratio
                         left_width = (screen_width / 2) - (right_width / 2)
                     elif side == 'CR':
+                        side_text = "Center Right"
                         left_width = screen_height * ratio
                         right_width = (screen_width / 2) - (left_width / 2)
                         left_x = right_width
@@ -811,7 +777,7 @@ class TkGUIManager:
                     settings_vars[sorted_windows[not aot]][3].set(True)
 
                     # Set name
-                    config_name_var.set(f"{settings_vars[sorted_windows[aot]][4].get()} {side}_{numerator}-9")
+                    config_name_var.set(f"{settings_vars[sorted_windows[aot]][4].get()} {side}_{numerator}-{denominator}")
                 else:
                     numerator, denominator, side = layout_configs[self.layout_number]
                     ratio = Fraction(numerator, denominator)
@@ -822,13 +788,16 @@ class TkGUIManager:
                     window_width = screen_height * ratio
 
                     if side == 'R':
+                        side_text = "Right"
                         x = screen_width - window_width
                     elif side == 'L':
+                        side_text = "Left"
                         x = 0
                     elif side == 'C':
+                        side_text = "Center"
                         x = (screen_width / 2) - (window_width / 2)
-
-                    print(numerator, denominator, side)
+                    else:
+                        side_text = "Fullscreen"
 
                     for i, title in enumerate(sorted_windows):
                         settings_vars[title][0].set(f'{int(x)},0') # Position
@@ -836,7 +805,10 @@ class TkGUIManager:
                         settings_vars[title][2].set(True)   # Always on top
                         settings_vars[title][3].set(False) # Titlebar
 
-                preset_label_text = f"Preset {self.layout_number + 1}/{layout_max + 1}\n\n"
+                    # Set name
+                    config_name_var.set(f"{settings_vars[sorted_windows[0]][4].get()} {side}_{numerator}-{denominator}")
+
+                preset_label_text = f"Preset {self.layout_number + 1}/{layout_max + 1}\t\t"
 
                 if len(sorted_windows) == 4:
                     self.ratio_label['text'] = (
@@ -845,21 +817,20 @@ class TkGUIManager:
                 elif len(sorted_windows) == 3:
                     self.ratio_label['text'] = (
                         f"{preset_label_text}"
-                        f"{numerator}/{denominator} "
-                        f"L:{weight_1.numerator}/{weight_1.denominator} "
-                        f"R:{weight_2.numerator}/{weight_2.denominator}"
+                        f"Aspect: {numerator}/{denominator} "
+                        f"Left {weight_1.numerator}/{weight_1.denominator} Right {weight_2.numerator}/{weight_2.denominator}"
                     )
                 elif len(sorted_windows) == 2:
                     self.ratio_label['text'] = (
                         f"{preset_label_text}"
-                        f"{side}: {numerator}/9"
+                        f"{side_text:10} {numerator}/{denominator}"
                     )
                 else:
                     self.ratio_label['text'] = (
                         f"{preset_label_text}"
-                        f"{side}: {numerator}/9"
+                        f"{side_text:10} {numerator}/{denominator}"
                     )
-                
+
                 self.layout_number = 0 if self.layout_number >= layout_max else self.layout_number + 1
                 update_layout_frame()
 
@@ -883,18 +854,23 @@ class TkGUIManager:
                         refresh_callback(name)
                     on_close()
 
+            def reset_presets():
+                if messagebox.askyesno("Reset Presets", "Are you sure you want to reset all presets?"):
+                    self.auto_align_layouts = ConfigManager.load_or_create_layouts(reset=True)
+
             update_layout_frame()
             ttk.Button(settings_frame, text="Auto align", command=auto_position, width=15).grid(row=row, column=0, pady=pady, sticky='w')
             self.ratio_label = ttk.Label(settings_frame, text="", font=entry_font)
-            self.ratio_label.grid(row=row+1, column=0, pady=pady, sticky='w')
+            self.ratio_label.grid(row=row+2, column=0, columnspan=6, padx=10, pady=pady, sticky='w')
             ttk.Button(settings_frame, text="Update drawing", command=update_layout_frame, width=15).grid(row=row, column=6, pady=pady, sticky='w')
             ttk.Button(settings_frame, text="Save Config", command=on_save, width=40).grid(row=row+1, column=2, columnspan=3, pady=pady)
+            ttk.Button(settings_frame, text="Reset Presets", command=reset_presets, width=15).grid(row=row+1, column=6, pady=pady)
 
             config_win.geometry(f"{UIConstants.WINDOW_WIDTH}x{UIConstants.WINDOW_HEIGHT}")
 
         config_win = tk.Toplevel(parent)
         config_win.title("Create Config")
-        config_win.configure(bg=self.background)
+        config_win.configure(bg=Colors.BACKGROUND)
 
         parent.update_idletasks()
         x = parent.winfo_rootx()
@@ -928,11 +904,11 @@ class TkGUIManager:
                 selection_frame,
                 text=clean_title,
                 variable=var,
-                bg=self.background,
-                fg=self.text_normal,
-                selectcolor=self.window_normal,
-                activebackground=self.window_normal_dark,
-                activeforeground=self.text_normal,
+                bg=Colors.BACKGROUND,
+                fg=Colors.TEXT_NORMAL,
+                selectcolor=Colors.WINDOW_NORMAL,
+                activebackground=Colors.WINDOW_NORMAL_DARK,
+                activeforeground=Colors.TEXT_NORMAL,
                 relief=tk.FLAT,
                 highlightthickness=0,
                 bd=0,
@@ -952,15 +928,15 @@ class TkGUIManager:
 #################################
 
 class ScreenLayoutFrame(ttk.Frame):
-    def __init__(self, parent, screen_width, screen_height, windows: List[WindowInfo], theme, assets_dir, use_images=False):
+    def __init__(self, parent, screen_width, screen_height, windows: List[WindowInfo], assets_dir, use_images=False):
         super().__init__(parent)
         self.windows = windows
-        self.update_colors(theme)
         
         self.assets_dir = assets_dir
         self.use_images = use_images
 
-        self.canvas = tk.Canvas(self, bg=choose_color(Colors.BACKGROUND, Themes.APPROVED_DARK_THEMES, theme), highlightthickness=0)
+        self.canvas = tk.Canvas(self, bg=Colors.BACKGROUND)
+        self.canvas.configure(highlightthickness=0, bd=0)
         self.canvas.pack(fill=tk.BOTH, expand=True)
         self.canvas.bind("<Configure>", self.on_resize)
 
@@ -968,32 +944,19 @@ class ScreenLayoutFrame(ttk.Frame):
         self.screen_height = screen_height
         self.taskbar_height = UIConstants.TASKBAR_HEIGHT
 
-        self.compute_bounds(include_placeholders=True)
-
-    def update_colors(self, theme):
-        self.background = choose_color(Colors.BACKGROUND, Themes.APPROVED_DARK_THEMES, theme)
-        self.text_normal = choose_color(Colors.TEXT_NORMAL, Themes.APPROVED_DARK_THEMES, theme)
-        self.window_normal = choose_color(Colors.WINDOW_NORMAL, Themes.APPROVED_DARK_THEMES, theme)
-        self.window_normal_dark = choose_color(Colors.WINDOW_NORMAL_DARK, Themes.APPROVED_DARK_THEMES, theme)
-        self.window_border = choose_color(Colors.WINDOW_BORDER, Themes.APPROVED_DARK_THEMES, theme)
-        self.taskbar = choose_color(Colors.TASKBAR, Themes.APPROVED_DARK_THEMES, theme)
-        self.window_always_on_top = choose_color(Colors.WINDOW_ALWAYS_ON_TOP, Themes.APPROVED_DARK_THEMES, theme)
-        self.text_error = choose_color(Colors.TEXT_ERROR, Themes.APPROVED_DARK_THEMES, theme)
+        self.compute_bounds()
     
-    def redraw(self, theme):
-        self.canvas.config(bg=(choose_color(Colors.BACKGROUND, Themes.APPROVED_DARK_THEMES, theme)))
-        self.update_colors(theme)
+    def redraw(self):
         width = self.canvas.winfo_width()
         height = self.canvas.winfo_height()
         self.draw_layout(width, height)
 
-    def compute_bounds(self, include_placeholders=False):
+    def compute_bounds(self):
         if not self.windows:
             self.min_x, self.min_y = 0, 0
             self.max_x, self.max_y = self.screen_width, self.screen_height
             return
 
-        # Include all windows; placeholders for missing windows if needed
         xs = []
         ys = []
         xs_end = []
@@ -1043,16 +1006,16 @@ class ScreenLayoutFrame(ttk.Frame):
         # Backgound
         self.canvas.create_rectangle(
             frame_left, frame_top, frame_right, frame_bottom,
-            outline=self.window_border, width=frame_width
+            outline=Colors.WINDOW_BORDER, width=frame_width
         )
 
         # Taskbar
         self.canvas.create_rectangle(
             frame_left,
-            frame_bottom - self.taskbar_height * scale,
+            frame_bottom - UIConstants.TASKBAR_HEIGHT * scale,
             frame_right,
             frame_bottom,
-            fill=self.taskbar,
+            fill=Colors.TASKBAR,
             outline=""
         )
 
@@ -1063,8 +1026,8 @@ class ScreenLayoutFrame(ttk.Frame):
             w = win.width * scale
             h = win.height * scale
 
-            border_color = self.window_border
-            fill_color = self.window_always_on_top if win.always_on_top else self.window_normal
+            border_color = Colors.WINDOW_BORDER
+            fill_color = Colors.WINDOW_ALWAYS_ON_TOP if win.always_on_top else Colors.WINDOW_NORMAL
                 
             # Draw window rectangle
             self.canvas.create_rectangle(
@@ -1102,7 +1065,7 @@ class ScreenLayoutFrame(ttk.Frame):
                 f"AOT: {'Yes' if win.always_on_top else 'No'}"
             ]
 
-            text_color = self.text_normal
+            text_color = Colors.TEXT_NORMAL
             padding_x = 5
             padding_y = 5
             line_height = 16
@@ -1124,7 +1087,7 @@ class ScreenLayoutFrame(ttk.Frame):
                     text_y - 2, 
                     text_x + text_width, 
                     text_y + text_height, 
-                    fill=self.window_normal if not win.always_on_top else self.window_always_on_top, 
+                    fill=Colors.WINDOW_NORMAL if not win.always_on_top else Colors.WINDOW_ALWAYS_ON_TOP, 
                     outline=""
                 )
                 
@@ -1148,7 +1111,7 @@ class ScreenLayoutFrame(ttk.Frame):
                     (y + h - margin_bottom) - 12, 
                     (x + w / 2) + 28,
                     (y + h - margin_bottom) - 26,
-                    fill=self.window_normal if not win.always_on_top else self.window_always_on_top, 
+                    fill=Colors.WINDOW_NORMAL if not win.always_on_top else Colors.WINDOW_ALWAYS_ON_TOP, 
                     outline=""
                 )
                 
@@ -1156,7 +1119,7 @@ class ScreenLayoutFrame(ttk.Frame):
                     x + w / 2,
                     y + h - margin_bottom - 20,
                     text="MISSING",
-                    fill=self.text_error,
+                    fill=Colors.TEXT_ERROR,
                     font=Fonts.TEXT_BOLD,
                     justify=tk.CENTER
                 )

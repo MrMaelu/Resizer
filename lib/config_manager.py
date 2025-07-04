@@ -48,19 +48,21 @@ class ConfigManager:
         return layouts
 
     @staticmethod
-    def load_or_create_layouts(path=None) -> dict:
+    def load_or_create_layouts(path=None, reset=False) -> dict:
         path = path or ConfigManager.LAYOUT_CONFIG_FILE
 
+        if reset or not os.path.exists(path):
+            # Create new config file with defaults
+            config = ConfigManager.serialize(LayoutDefaults.DEFAULT_LAYOUTS)
+            with open(path, 'w') as f:
+                config.write(f)
+            return LayoutDefaults.DEFAULT_LAYOUTS
+
+        # Load config file
         if os.path.exists(path):
             config = configparser.ConfigParser()
             config.read(path)
             return ConfigManager.deserialize(config)
-
-        # Create new config file with defaults
-        config = ConfigManager.serialize(LayoutDefaults.DEFAULT_LAYOUTS)
-        with open(path, 'w') as f:
-            config.write(f)
-        return LayoutDefaults.DEFAULT_LAYOUTS
     
 
     def list_config_files(self):
@@ -263,3 +265,4 @@ class ConfigManager:
                     repaired_config.set(section, key, val)
             
         return repaired_config
+
